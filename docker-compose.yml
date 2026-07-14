@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:13.0
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: PSU_LOAN
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ict_086_707
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  postgres_data:
