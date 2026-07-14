@@ -4,11 +4,11 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: PSU_LOAN
+      POSTGRES_DB: psu_loan
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ict_086_707
+      POSTGRES_PASSWORD: 1234
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data 
     restart: always
 
 volumes:
