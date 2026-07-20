@@ -1,122 +1,76 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useNavigate } from "react-router-dom";
+import Home from "./pages/Home";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const navigate = useNavigate();
+
+  const user = {
+    name: "นักศึกษา",
+  };
+
+  const homeContents = [
+    {
+      id: 1,
+      no: 1,
+      title: "ตรวจสอบคุณสมบัติเบื้องต้น",
+      description:
+        "ตรวจสอบผลการเรียนและชั่วโมงจิตอาสาก่อนยื่นเอกสารกู้ยืมเงินเพื่อการศึกษา",
+      dateText: "กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ",
+      color: "pink",
+      active: true,
+    },
+    {
+      id: 2,
+      no: 2,
+      title: "จัดเตรียมเอกสาร",
+      description:
+        "จัดเตรียมเอกสารตามประเภทของผู้กู้ และตรวจสอบความชัดเจนของไฟล์ก่อนอัปโหลด",
+      dateText: "รองรับไฟล์ PDF, JPG, JPEG และ PNG",
+      color: "green",
+      active: true,
+    },
+    {
+      id: 3,
+      no: 3,
+      title: "อัปโหลดเอกสาร",
+      description:
+        "ส่งเอกสารผ่านระบบออนไลน์และติดตามผลการตรวจสอบจากเจ้าหน้าที่",
+      dateText: "หากเอกสารไม่ถูกต้อง เจ้าหน้าที่จะส่งกลับให้แก้ไข",
+      color: "purple",
+      active: true,
+    },
+    {
+      id: 4,
+      no: 4,
+      title: "จองคิวลงนามเอกสาร",
+      description:
+        "เมื่อเอกสารผ่านการตรวจสอบแล้ว นักศึกษาสามารถเลือกวันและเวลาสำหรับเข้ารับบริการ",
+      dateText: "สามารถจองคิวได้หลังเอกสารผ่านครบทุกฉบับ",
+      color: "orange",
+      active: true,
+    },
+  ];
+
+  function goProtectedPage(page) {
+    const routes = {
+      studentInfo: "/student-info",
+      uploadDocs: "/upload-docs",
+      booking: "/booking",
+      status: "/status",
+    };
+
+    const destination = routes[page];
+
+    if (destination) {
+      navigate(destination);
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <Home
+      goProtectedPage={goProtectedPage}
+      user={user}
+      homeContents={homeContents}
+    />
+  );
 }
-
-export default App
