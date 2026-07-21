@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-
+const studentRoutes = require("./routes/student");
 const pool = require("./config/db");
 
 const app = express();
@@ -40,4 +40,5 @@ app.get("/api/db-test", async (req, res) => {
     }
 });
 
+app.use("/api/student", studentRoutes);
 module.exports = app;
