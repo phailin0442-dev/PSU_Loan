@@ -2,6 +2,9 @@ import { useState } from "react";
 
 import Home from "./pages/Home";
 import Eligibility from "./pages/Eligibility";
+import StudentInfo from "./pages/StudentInfo";
+import UploadDocuments from "./pages/UploadDocuments";
+
 import StaffDashboard from "./pages/staff/StaffDashboard";
 
 function App() {
@@ -191,13 +194,28 @@ function App() {
   ]);
 
   const goProtectedPage = (targetPage) => {
-    if (
-      targetPage === "studentInfo" ||
-      targetPage === "eligibility"
-    ) {
+    if (targetPage === "home") {
+      setPage("home");
+      return;
+    }
+
+    if (targetPage === "studentInfo") {
+      setPage("studentInfo");
+      return;
+    }
+
+    if (targetPage === "eligibility") {
       setPage("eligibility");
       return;
     }
+
+    if (
+  targetPage === "uploadDocuments" ||
+  targetPage === "myDocuments"
+) {
+  setPage("uploadDocuments");
+  return;
+}
 
     if (targetPage === "staffDashboard") {
       setPage("staffDashboard");
@@ -211,6 +229,15 @@ function App() {
     alert("ยังไม่ได้สร้างหน้า StudentList และ DocumentReview");
   };
 
+  if (page === "studentInfo") {
+    return (
+      <StudentInfo
+        goProtectedPage={goProtectedPage}
+        setPage={setPage}
+      />
+    );
+  }
+
   if (page === "eligibility") {
     return (
       <Eligibility
@@ -220,6 +247,15 @@ function App() {
       />
     );
   }
+  
+   if (page === "uploadDocuments") {
+  return (
+    <UploadDocuments
+      goProtectedPage={goProtectedPage}
+      setPage={setPage}
+    />
+  );
+}
 
   if (page === "staffDashboard") {
     return (
