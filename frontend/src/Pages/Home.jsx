@@ -1,3 +1,5 @@
+
+
 function Home({ goProtectedPage, user, homeContents = [] }) {
     return (
         <div className="min-h-screen bg-[#eef5ff]">
@@ -62,6 +64,11 @@ function Home({ goProtectedPage, user, homeContents = [] }) {
                             >
                                 เริ่มใช้งานระบบ
                             </button>
+
+                            
+
+
+                            
                         </div>
 
                         <div className="bg-white rounded-3xl p-8 text-center shadow">

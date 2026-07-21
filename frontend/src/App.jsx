@@ -1,6 +1,8 @@
 import { useState } from "react";
+
 import Home from "./pages/Home";
 import Eligibility from "./pages/Eligibility";
+import StaffDashboard from "./pages/staff/StaffDashboard";
 
 function App() {
   const [page, setPage] = useState("home");
@@ -10,9 +12,8 @@ function App() {
     role: "student",
   });
 
-  
-
   const [loanData, setLoanData] = useState(null);
+
   console.log("loanData:", loanData);
 
   const [studentData] = useState({
@@ -23,6 +24,127 @@ function App() {
     major: "เทคโนโลยีสารสนเทศและการสื่อสาร",
     yearLevel: "2",
   });
+
+  const [students] = useState([
+    {
+      id: 1,
+      studentId: "6810110001",
+      fullName: "นางสาวณัฐณิชา ศรีสุข",
+      faculty: "คณะวิทยาศาสตร์",
+      major: "วิทยาการคอมพิวเตอร์",
+      year: 1,
+      borrowerType: "ผู้กู้รายใหม่",
+      gpax: 2.85,
+      volunteerHours: 12,
+      age: 18,
+      submittedDate: "20 กรกฎาคม 2569",
+      status: "รอตรวจสอบ",
+      documents: [
+        {
+          id: 101,
+          name: "หลักฐานผลการเรียน GPAX",
+          fileName: "gpax-6810110001.pdf",
+          status: "รอตรวจสอบ",
+          remark: "",
+        },
+        {
+          id: 102,
+          name: "หลักฐานชั่วโมงจิตอาสา",
+          fileName: "volunteer-6810110001.pdf",
+          status: "รอตรวจสอบ",
+          remark: "",
+        },
+        {
+          id: 103,
+          name: "สำเนาบัตรประชาชน",
+          fileName: "citizen-card-6810110001.jpg",
+          status: "รอตรวจสอบ",
+          remark: "",
+        },
+        {
+          id: 104,
+          name: "สัญญากู้ยืมเงิน",
+          fileName: "loan-contract-6810110001.pdf",
+          status: "รอตรวจสอบ",
+          remark: "",
+        },
+      ],
+    },
+    {
+      id: 2,
+      studentId: "6810110002",
+      fullName: "นายธนภัทร ใจดี",
+      faculty: "คณะวิศวกรรมศาสตร์",
+      major: "วิศวกรรมคอมพิวเตอร์",
+      year: 2,
+      borrowerType: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
+      gpax: 2.42,
+      volunteerHours: 40,
+      age: 20,
+      submittedDate: "19 กรกฎาคม 2569",
+      status: "ต้องแก้ไข",
+      documents: [
+        {
+          id: 201,
+          name: "หลักฐานผลการเรียน GPAX",
+          fileName: "gpax-6810110002.pdf",
+          status: "ผ่าน",
+          remark: "",
+        },
+        {
+          id: 202,
+          name: "หลักฐานชั่วโมงจิตอาสา",
+          fileName: "volunteer-6810110002.jpg",
+          status: "ต้องแก้ไข",
+          remark: "ภาพไม่ชัด กรุณาอัปโหลดใหม่",
+        },
+        {
+          id: 203,
+          name: "ใบเบิกเงิน",
+          fileName: "withdrawal-form-6810110002.pdf",
+          status: "รอตรวจสอบ",
+          remark: "",
+        },
+      ],
+    },
+    {
+      id: 3,
+      studentId: "6810110003",
+      fullName: "นางสาวกมลชนก แสงทอง",
+      faculty: "คณะทรัพยากรธรรมชาติ",
+      major: "เกษตรศาสตร์",
+      year: 3,
+      borrowerType: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
+      gpax: 3.12,
+      volunteerHours: 45,
+      age: 21,
+      submittedDate: "18 กรกฎาคม 2569",
+      status: "ผ่าน",
+      documents: [
+        {
+          id: 301,
+          name: "หลักฐานผลการเรียน GPAX",
+          fileName: "gpax-6810110003.pdf",
+          status: "ผ่าน",
+          remark: "",
+        },
+        {
+          id: 302,
+          name: "หลักฐานชั่วโมงจิตอาสา",
+          fileName: "volunteer-6810110003.pdf",
+          status: "ผ่าน",
+          remark: "",
+        },
+        {
+          id: 303,
+          name: "ใบเบิกเงิน",
+          fileName: "withdrawal-form-6810110003.pdf",
+          status: "ผ่าน",
+          remark: "",
+        },
+      ],
+    },
+  ]);
 
   const [homeContents] = useState([
     {
@@ -69,17 +191,24 @@ function App() {
   ]);
 
   const goProtectedPage = (targetPage) => {
-    if (targetPage === "studentInfo") {
+    if (
+      targetPage === "studentInfo" ||
+      targetPage === "eligibility"
+    ) {
       setPage("eligibility");
       return;
     }
 
-    if (targetPage === "eligibility") {
-      setPage("eligibility");
+    if (targetPage === "staffDashboard") {
+      setPage("staffDashboard");
       return;
     }
 
     alert("หน้านี้ยังไม่ได้สร้าง");
+  };
+
+  const openStudentReview = () => {
+    alert("ยังไม่ได้สร้างหน้า StudentList และ DocumentReview");
   };
 
   if (page === "eligibility") {
@@ -88,6 +217,16 @@ function App() {
         setPage={setPage}
         setLoanData={setLoanData}
         studentData={studentData}
+      />
+    );
+  }
+
+  if (page === "staffDashboard") {
+    return (
+      <StaffDashboard
+        students={students}
+        setPage={setPage}
+        openStudentReview={openStudentReview}
       />
     );
   }
