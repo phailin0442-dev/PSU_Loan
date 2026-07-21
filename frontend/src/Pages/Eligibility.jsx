@@ -104,8 +104,8 @@ function Eligibility({ setPage, setLoanData, studentData }) {
       })
 
       setTimeout(() => {
-  alert("ผ่านการคัดกรองคุณสมบัติแล้ว");
-}, 500);
+        alert("ผ่านการคัดกรองคุณสมบัติแล้ว");
+      }, 500);
     }
   }
 

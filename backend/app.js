@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const studentRoutes = require("./routes/student");
 const pool = require("./config/db");
+const homeRoutes = require("./routes/home");
+const path = require("path");
+
 
 const app = express();
 
@@ -40,5 +43,7 @@ app.get("/api/db-test", async (req, res) => {
     }
 });
 
+app.use("/api/home", homeRoutes);
 app.use("/api/student", studentRoutes);
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 module.exports = app;
