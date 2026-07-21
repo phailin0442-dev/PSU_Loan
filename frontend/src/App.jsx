@@ -1,69 +1,95 @@
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import Home from "./pages/Home";
+import Eligibility from "./pages/Eligibility";
 
-export default function App() {
-  const navigate = useNavigate();
+function App() {
+  const [page, setPage] = useState("home");
 
-  const user = {
+  const [user] = useState({
     name: "นักศึกษา",
-  };
+    role: "student",
+  });
 
-  const homeContents = [
+  
+
+  const [loanData, setLoanData] = useState(null);
+  console.log("loanData:", loanData);
+
+  const [studentData] = useState({
+    fullname: "นางสาวนักศึกษา ทดสอบ",
+    studentId: "6610110001",
+    birthdate: "12/08/2547",
+    faculty: "คณะวิทยาศาสตร์",
+    major: "เทคโนโลยีสารสนเทศและการสื่อสาร",
+    yearLevel: "2",
+  });
+
+  const [homeContents] = useState([
     {
       id: 1,
       no: 1,
-      title: "ตรวจสอบคุณสมบัติเบื้องต้น",
+      title: "การเข้าร่วมกิจกรรมจิตอาสา",
       description:
-        "ตรวจสอบผลการเรียนและชั่วโมงจิตอาสาก่อนยื่นเอกสารกู้ยืมเงินเพื่อการศึกษา",
-      dateText: "กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ",
+        "นักศึกษาผู้กู้ยืมต้องเข้าร่วมกิจกรรมจิตอาสาและสะสมชั่วโมงตามเกณฑ์ที่กำหนด โดยผู้กู้รายใหม่ต้องมีไม่น้อยกว่า 2 ชั่วโมง และผู้กู้ต่อเนื่องต้องมีไม่น้อยกว่า 36 ชั่วโมง",
+      dateText:
+        "ช่วงเวลาดำเนินกิจกรรม : ตั้งแต่วันที่ 1 มกราคม 2568 – 20 มีนาคม 2569",
       color: "pink",
       active: true,
     },
     {
       id: 2,
       no: 2,
-      title: "จัดเตรียมเอกสาร",
+      title: "ตรวจสอบความถูกต้องของข้อมูลการบันทึกจิตอาสา",
       description:
-        "จัดเตรียมเอกสารตามประเภทของผู้กู้ และตรวจสอบความชัดเจนของไฟล์ก่อนอัปโหลด",
-      dateText: "รองรับไฟล์ PDF, JPG, JPEG และ PNG",
+        "นักศึกษาตรวจสอบข้อมูลกิจกรรมจิตอาสาให้ถูกต้องครบถ้วน และอัปโหลดหลักฐานประกอบก่อนส่งข้อมูลเข้าสู่ระบบ",
+      dateText: "ภายในวันที่ 20 มีนาคม 2569",
       color: "green",
       active: true,
     },
     {
       id: 3,
       no: 3,
-      title: "อัปโหลดเอกสาร",
+      title: "ตรวจสอบผลรายงานสถานภาพการศึกษา",
       description:
-        "ส่งเอกสารผ่านระบบออนไลน์และติดตามผลการตรวจสอบจากเจ้าหน้าที่",
-      dateText: "หากเอกสารไม่ถูกต้อง เจ้าหน้าที่จะส่งกลับให้แก้ไข",
+        "ระบบจะตรวจสอบสถานภาพการศึกษาและรายงานข้อมูลที่เกี่ยวข้อง เพื่อใช้ประกอบการพิจารณาคุณสมบัติของผู้กู้ยืม",
+      dateText: "ภายในวันที่ 15 เมษายน 2569 - 30 พฤษภาคม 2569",
       color: "purple",
       active: true,
     },
     {
       id: 4,
       no: 4,
-      title: "จองคิวลงนามเอกสาร",
+      title: "คัดกรองคุณสมบัติ",
       description:
-        "เมื่อเอกสารผ่านการตรวจสอบแล้ว นักศึกษาสามารถเลือกวันและเวลาสำหรับเข้ารับบริการ",
-      dateText: "สามารถจองคิวได้หลังเอกสารผ่านครบทุกฉบับ",
+        "กรอกข้อมูลประเภทผู้กู้ เกรดเฉลี่ยสะสม และชั่วโมงจิตอาสา พร้อมแนบไฟล์หลักฐาน GPAX และหลักฐานชั่วโมงจิตอาสา",
+      dateText: "ระบบคัดกรองคุณสมบัติ",
       color: "orange",
       active: true,
     },
-  ];
+  ]);
 
-  function goProtectedPage(page) {
-    const routes = {
-      studentInfo: "/student-info",
-      uploadDocs: "/upload-docs",
-      booking: "/booking",
-      status: "/status",
-    };
-
-    const destination = routes[page];
-
-    if (destination) {
-      navigate(destination);
+  const goProtectedPage = (targetPage) => {
+    if (targetPage === "studentInfo") {
+      setPage("eligibility");
+      return;
     }
+
+    if (targetPage === "eligibility") {
+      setPage("eligibility");
+      return;
+    }
+
+    alert("หน้านี้ยังไม่ได้สร้าง");
+  };
+
+  if (page === "eligibility") {
+    return (
+      <Eligibility
+        setPage={setPage}
+        setLoanData={setLoanData}
+        studentData={studentData}
+      />
+    );
   }
 
   return (
@@ -74,3 +100,5 @@ export default function App() {
     />
   );
 }
+
+export default App;
