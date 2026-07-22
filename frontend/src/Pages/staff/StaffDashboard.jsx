@@ -1,200 +1,402 @@
-function StaffDashboard({ students, setPage, openStudentReview }) {
-  const pendingCount = students.filter(
-    (student) => student.status === "รอตรวจสอบ"
-  ).length;
+import { useMemo, useState } from "react";
+import {
+  getBorrowerTypeLabel,
+  getDocumentCompletion,
+  normalizeStatus,
+  requiresQualificationCheck,
+} from "./documentRules";
 
-  const revisionCount = students.filter(
-    (student) => student.status === "ต้องแก้ไข"
-  ).length;
+function StaffDashboard({
+  students = [],
+  setPage,
+  openStudentReview,
+}) {
+  const [searchText, setSearchText] = useState("");
 
-  const approvedCount = students.filter(
-    (student) => student.status === "ผ่าน"
-  ).length;
-//
+  const summary = useMemo(() => {
+    return students.reduce(
+      (result, student) => {
+        const status = normalizeStatus(student.status);
+
+        if (status === "ผ่าน") result.approved += 1;
+        else if (status === "ต้องแก้ไข") result.rejected += 1;
+        else result.pending += 1;
+
+        return result;
+      },
+      {
+        total: students.length,
+        pending: 0,
+        rejected: 0,
+        approved: 0,
+      }
+    );
+  }, [students]);
+
+  const filteredStudents = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+
+    if (!keyword) {
+      return students;
+    }
+
+    return students.filter((student) =>
+      [
+        student.studentId,
+        student.fullName,
+        student.faculty,
+        student.major,
+        getBorrowerTypeLabel(
+          student.borrowerTypeCode,
+          student.borrowerType
+        ),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword)
+    );
+  }, [students, searchText]);
+
   return (
     <div className="min-h-screen bg-[#eef5ff] text-[#07116f]">
-      <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
-        <div className="flex min-h-20 w-full items-center justify-between px-6 py-4 lg:px-12">
-          <div>
-            <h1 className="text-2xl font-black md:text-3xl">
+      <div className="flex min-h-screen">
+        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col bg-[#07116f] text-white lg:flex">
+          <div className="border-b border-white/10 px-7 py-7">
+            <h1 className="text-2xl font-black">
               PSU Smart Loan
             </h1>
-
-            <p className="text-sm text-gray-500">
-              ระบบตรวจสอบเอกสารสำหรับเจ้าหน้าที่
+            <p className="mt-1 text-sm text-blue-200">
+              ระบบคัดกรองพร้อมจองคิวผู้กู้ยืมเงินเพื่อการศึกษา
             </p>
           </div>
 
-          <nav className="flex items-center gap-4">
-            <button
-              type="button"
-              className="font-bold text-[#07116f]"
-            >
-              ภาพรวม
-            </button>
+          <div className="flex-1 overflow-y-auto px-5 py-5">
+            <nav className="space-y-2">
+              <SidebarButton
+                icon="🏠"
+                label="Dashboard"
+                active
+              />
 
-            <button
-              type="button"
-              onClick={() => setPage("studentList")}
-              className="rounded-xl bg-[#07116f] px-5 py-2.5 font-bold text-white"
-            >
-              รายชื่อนักศึกษา
-            </button>
-          </nav>
-        </div>
-      </header>
+              <div className="pt-4">
+                <div className="space-y-2">
+                  <SidebarButton
+                    icon="👥"
+                    label="รายชื่อนักศึกษา"
+                    onClick={() => setPage?.("studentList")}
+                  />
+                </div>
+              </div>
 
-      <main className="w-full px-6 py-8 lg:px-12">
-        <section className="mb-8">
-          <h2 className="text-3xl font-black">ภาพรวมการตรวจสอบเอกสาร</h2>
+              <SidebarButton
+                icon="📅"
+                label="จัดการการจองคิว"
+                disabled
+                comingSoon
+              />
+              <SidebarButton
+                icon="📢"
+                label="อัปเดตสถานะ"
+                disabled
+                comingSoon
+              />
+              <SidebarButton
+                icon="📈"
+                label="รายงาน"
+                disabled
+                comingSoon
+              />
+              <SidebarButton
+                icon="⚙️"
+                label="ตั้งค่าเกณฑ์"
+                disabled
+                comingSoon
+              />
+            </nav>
+          </div>
 
-          <p className="mt-2 text-gray-500">
-            ตรวจสอบคำร้อง เอกสาร และผลการดำเนินงานของนักศึกษา
-          </p>
-        </section>
-
-        <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            title="คำร้องทั้งหมด"
-            value={students.length}
-            detail="นักศึกษาที่ส่งเอกสาร"
-            icon="👥"
-          />
-
-          <SummaryCard
-            title="รอตรวจสอบ"
-            value={pendingCount}
-            detail="คำร้องที่ยังไม่ได้ตรวจ"
-            icon="⏳"
-          />
-
-          <SummaryCard
-            title="ต้องแก้ไข"
-            value={revisionCount}
-            detail="เอกสารที่ส่งกลับแก้ไข"
-            icon="📝"
-          />
-
-          <SummaryCard
-            title="ผ่านแล้ว"
-            value={approvedCount}
-            detail="คำร้องที่ตรวจเรียบร้อย"
-            icon="✅"
-          />
-        </section>
-
-        <section className="mt-8 overflow-hidden rounded-3xl bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-gray-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-xl font-black">รายการล่าสุด</h2>
-
-              <p className="text-sm text-gray-500">
-                นักศึกษาที่ส่งเอกสารเข้ามาล่าสุด
+          <div className="border-t border-white/10 p-5">
+            <div className="mb-4 rounded-2xl bg-white/10 p-4">
+              <p className="text-sm text-blue-200">
+                ผู้ใช้งาน
+              </p>
+              <p className="mt-1 font-black">
+                เจ้าหน้าที่ กยศ.
               </p>
             </div>
 
             <button
               type="button"
-              onClick={() => setPage("studentList")}
-              className="w-fit rounded-xl border border-[#07116f] px-5 py-2 font-bold hover:bg-blue-50"
+              onClick={() => setPage?.("home")}
+              className="w-full rounded-xl bg-white px-5 py-3 font-black text-[#07116f]"
             >
-              ดูทั้งหมด
+              ← กลับหน้าหลัก
             </button>
           </div>
+        </aside>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left">
-              <thead className="bg-[#07116f] text-white">
-                <tr>
-                  <th className="px-6 py-4">รหัสนักศึกษา</th>
-                  <th className="px-6 py-4">ชื่อ-นามสกุล</th>
-                  <th className="px-6 py-4">ประเภทผู้กู้</th>
-                  <th className="px-6 py-4">วันที่ส่ง</th>
-                  <th className="px-6 py-4">สถานะ</th>
-                  <th className="px-6 py-4 text-center">จัดการ</th>
-                </tr>
-              </thead>
+        <main className="min-w-0 flex-1">
+          <header className="border-b border-gray-100 bg-white px-5 py-5 shadow-sm sm:px-8 lg:px-10">
+            <h2 className="text-2xl font-black">
+              Dashboard เจ้าหน้าที่
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              ค้นหาและเลือกนักศึกษาเพื่อตรวจสอบข้อมูลและเอกสาร
+            </p>
+          </header>
 
-              <tbody>
-                {students.slice(0, 5).map((student) => (
-                  <tr
-                    key={student.id}
-                    className="border-b border-gray-100 hover:bg-blue-50/40"
-                  >
-                    <td className="px-6 py-4">{student.studentId}</td>
+          <div className="px-5 py-7 sm:px-8 lg:px-10">
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <SummaryCard
+                label="นักศึกษาทั้งหมด"
+                value={summary.total}
+                icon="👥"
+              />
+              <SummaryCard
+                label="รอตรวจสอบ"
+                value={summary.pending}
+                icon="⏳"
+              />
+              <SummaryCard
+                label="ต้องแก้ไข"
+                value={summary.rejected}
+                icon="⚠️"
+              />
+              <SummaryCard
+                label="ตรวจผ่านแล้ว"
+                value={summary.approved}
+                icon="✅"
+              />
+            </section>
 
-                    <td className="px-6 py-4 font-bold">
-                      {student.fullName}
-                    </td>
+            <section className="mt-7 rounded-3xl bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 className="text-xl font-black">
+                    รายชื่อนักศึกษา
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    ค้นหาจากชื่อ รหัสนักศึกษา คณะ สาขา หรือประเภทผู้กู้
+                  </p>
+                </div>
 
-                    <td className="px-6 py-4">
-                      {student.borrowerType}
-                    </td>
+                <input
+                  type="text"
+                  value={searchText}
+                  onChange={(event) =>
+                    setSearchText(event.target.value)
+                  }
+                  placeholder="ค้นหานักศึกษา..."
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 lg:max-w-md"
+                />
+              </div>
 
-                    <td className="px-6 py-4">
-                      {student.submittedDate}
-                    </td>
+              <div className="mt-5 overflow-x-auto">
+                <table className="w-full min-w-[1180px] text-left">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50 text-sm text-gray-500">
+                      <th className="px-5 py-4">
+                        นักศึกษา
+                      </th>
+                      <th className="px-5 py-4">
+                        ภาคเรียน
+                      </th>
+                      <th className="px-5 py-4">
+                        ประเภทผู้กู้
+                      </th>
+                      <th className="px-5 py-4 text-center">
+                        GPAX
+                      </th>
+                      <th className="px-5 py-4 text-center">
+                        จิตอาสา
+                      </th>
+                      <th className="px-5 py-4 text-center">
+                        เอกสารที่ต้องใช้
+                      </th>
+                      <th className="px-5 py-4 text-center">
+                        ความครบถ้วน
+                      </th>
+                      <th className="px-5 py-4">
+                        สถานะ
+                      </th>
+                    </tr>
+                  </thead>
 
-                    <td className="px-6 py-4">
-                      <StatusBadge status={student.status} />
-                    </td>
+                  <tbody>
+                    {filteredStudents.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="9"
+                          className="px-5 py-14 text-center text-gray-500"
+                        >
+                          ไม่พบข้อมูลนักศึกษา
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredStudents.map((student) => {
+                        const completion =
+                          getDocumentCompletion(student);
+                        const checkQualification =
+                          requiresQualificationCheck(
+                            student.semester
+                          );
 
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        type="button"
-                        onClick={() => openStudentReview(student)}
-                        className="rounded-xl bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700"
-                      >
-                        ตรวจสอบ
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        return (
+                          <tr
+                            key={student.id}
+                            className="border-b border-gray-100 hover:bg-blue-50/40"
+                          >
+                            <td className="px-5 py-4">
+                              <p className="font-black">
+                                {student.fullName}
+                              </p>
+                              <p className="mt-1 text-sm text-gray-500">
+                                {student.studentId}
+                              </p>
+                            </td>
+
+                            <td className="px-5 py-4 font-black">
+                              {student.semester}
+                            </td>
+
+                            <td className="px-5 py-4">
+                              {getBorrowerTypeLabel(
+                                student.borrowerTypeCode,
+                                student.borrowerType
+                              )}
+                            </td>
+
+                            <td className="px-5 py-4 text-center font-black">
+                              {checkQualification
+                                ? student.gpax ?? "-"
+                                : "ไม่ตรวจ"}
+                            </td>
+
+                            <td className="px-5 py-4 text-center font-black">
+                              {checkQualification
+                                ? `${student.volunteerHours ??
+                                "-"
+                                } ชม.`
+                                : "ไม่ตรวจ"}
+                            </td>
+
+                            <td className="px-5 py-4 text-center font-black">
+                              {completion.required.length} ไฟล์
+                            </td>
+
+                            <td className="px-5 py-4 text-center">
+                              <CompletionBadge
+                                completed={completion.completed}
+                                total={completion.required.length}
+                                missing={completion.missing.length}
+                              />
+                            </td>
+
+                            <td className="px-5 py-4">
+                              <StatusBadge
+                                status={student.status}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
-        </section>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
 
-function SummaryCard({ title, value, detail, icon }) {
+function SidebarButton({
+  icon,
+  label,
+  active = false,
+  onClick,
+  disabled = false,
+  comingSoon = false,
+}) {
   return (
-    <article className="rounded-3xl bg-white p-6 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="font-bold text-gray-500">{title}</p>
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-bold transition ${disabled
+        ? "cursor-not-allowed text-blue-300/50"
+        : active
+          ? "bg-white text-[#07116f] shadow"
+          : "text-blue-100 hover:bg-white/10 hover:text-white"
+        }`}
+    >
+      <span>{icon}</span>
+      <span className="flex-1">{label}</span>
 
-          <p className="mt-2 text-4xl font-black text-[#07116f]">
+      {comingSoon && (
+        <span className="rounded-full bg-white/10 px-2 py-1 text-[10px]">
+          เร็ว ๆ นี้
+        </span>
+      )}
+    </button>
+  );
+}
+
+function SummaryCard({ label, value, icon }) {
+  return (
+    <div className="rounded-3xl bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-500">
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-black">
             {value}
           </p>
-
-          <p className="mt-2 text-sm text-gray-400">{detail}</p>
         </div>
 
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-3xl">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-2xl">
           {icon}
         </div>
       </div>
-    </article>
+    </div>
+  );
+}
+
+function CompletionBadge({
+  completed,
+  total,
+  missing,
+}) {
+  return (
+    <span
+      className={`rounded-full px-3 py-1.5 text-xs font-black ${missing === 0
+        ? "bg-green-100 text-green-700"
+        : "bg-red-100 text-red-700"
+        }`}
+    >
+      {completed}/{total} ไฟล์
+    </span>
   );
 }
 
 function StatusBadge({ status }) {
-  const classes = {
-    รอตรวจสอบ: "bg-yellow-100 text-yellow-700",
-    ต้องแก้ไข: "bg-red-100 text-red-700",
+  const value = normalizeStatus(status);
+
+  const styles = {
     ผ่าน: "bg-green-100 text-green-700",
+    ต้องแก้ไข: "bg-red-100 text-red-700",
+    รอตรวจสอบ: "bg-yellow-100 text-yellow-700",
   };
 
   return (
     <span
-      className={`inline-flex rounded-full px-3 py-1 text-sm font-bold ${
-        classes[status] || "bg-gray-100 text-gray-600"
-      }`}
+      className={`rounded-full px-3 py-1.5 text-xs font-black ${styles[value]}`}
     >
-      {status}
+      {value}
     </span>
   );
 }
