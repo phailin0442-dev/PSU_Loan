@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState} from "react";
 
-import Home from "./pages/Home";
-import Eligibility from "./pages/Eligibility";
-import StudentInfo from "./pages/StudentInfo";
-import UploadDocuments from "./pages/UploadDocuments";
+import Home from "./Pages/Home";
+import StudentProfiles from "./Pages/StudentProfiles";
+import StudentInfo from "./Pages/StudentInfo";
+import Eligibility from "./Pages/Eligibility";
+import UploadDocuments from "./Pages/UploadDocuments";
 
-import StaffDashboard from "./pages/staff/StaffDashboard";
+import StaffDashboard from "./Pages/staff/StaffDashboard";
 
 function App() {
   const [page, setPage] = useState("home");
@@ -19,7 +20,7 @@ function App() {
 
   console.log("loanData:", loanData);
 
-  const [studentData] = useState({
+  const [studentData, setStudentData] = useState({
     fullname: "นางสาวนักศึกษา ทดสอบ",
     studentId: "6610110001",
     birthdate: "12/08/2547",
@@ -194,49 +195,78 @@ function App() {
   ]);
 
   const goProtectedPage = (targetPage) => {
-    if (targetPage === "home") {
-      setPage("home");
-      return;
-    }
 
-    if (targetPage === "studentInfo") {
-      setPage("studentInfo");
-      return;
-    }
+  if (targetPage === "home") {
+    setPage("home");
+    return;
+  }
 
-    if (targetPage === "eligibility") {
-      setPage("eligibility");
-      return;
-    }
+  if (targetPage === "StudentProfiles") {
+    setPage("StudentProfiles");
+    return;
+  }
 
-    if (
-  targetPage === "uploadDocuments" ||
-  targetPage === "myDocuments"
-) {
-  setPage("uploadDocuments");
-  return;
-}
+  if (targetPage === "studentInfo") {
+    setPage("studentInfo");
+    return;
+  }
 
-    if (targetPage === "staffDashboard") {
-      setPage("staffDashboard");
-      return;
-    }
+  if (targetPage === "eligibility") {
+    setPage("eligibility");
+    return;
+  }
 
-    alert("หน้านี้ยังไม่ได้สร้าง");
-  };
+  if (
+    targetPage === "uploadDocuments" ||
+    targetPage === "myDocuments"
+  ) {
+    setPage("uploadDocuments");
+    return;
+  }
+
+  if (targetPage === "booking") {
+    setPage("booking");
+    return;
+  }
+
+  if (targetPage === "status") {
+    setPage("status");
+    return;
+  }
+
+  if (targetPage === "staffDashboard") {
+    setPage("staffDashboard");
+    return;
+  }
+
+  alert("หน้านี้ยังไม่ได้สร้าง");
+};
 
   const openStudentReview = () => {
     alert("ยังไม่ได้สร้างหน้า StudentList และ DocumentReview");
   };
 
-  if (page === "studentInfo") {
-    return (
-      <StudentInfo
-        goProtectedPage={goProtectedPage}
-        setPage={setPage}
-      />
-    );
-  }
+  if (page === "StudentProfiles") {
+  return (
+    <StudentProfiles
+      goProtectedPage={goProtectedPage}
+      setPage={setPage}
+    />
+  );
+}
+
+if (page === "studentInfo") {
+  return (
+    <StudentInfo
+      goProtectedPage={goProtectedPage}
+      setPage={setPage}
+      studentData={studentData}
+      setStudentData={setStudentData}
+    />
+  );
+}
+
+  
 
   if (page === "eligibility") {
     return (
