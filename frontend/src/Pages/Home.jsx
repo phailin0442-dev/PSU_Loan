@@ -362,7 +362,7 @@ function Home({ goProtectedPage }) {
         {
             id: 2,
             label: "ข้อมูลของฉัน",
-            page: "studentDashboard",
+            page: "studentInfo",
         },
         {
             id: 3,
@@ -394,7 +394,7 @@ function Home({ goProtectedPage }) {
             description:
                 "ดูข้อมูลส่วนตัว วันเกิด อายุ คณะ สาขา ชั้นปี และข้อมูลติดต่อ",
             buttonText: "ดูข้อมูลส่วนตัว",
-            page: "studentDashboard",
+            page: "studentInfo",
         },
         {
             id: 2,
@@ -590,7 +590,7 @@ function Home({ goProtectedPage }) {
                                     type="button"
                                     onClick={() =>
                                         goProtectedPage(
-                                            "studentDashboard"
+                                            "studentInfo"
                                         )
                                     }
                                     className="rounded-xl bg-[#07116f] px-7 py-3 font-black text-white transition hover:bg-[#101c8c]"

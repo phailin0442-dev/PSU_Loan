@@ -1,20 +1,23 @@
 import { useState } from "react";
 
-import Home from "./Pages/Home";
-import Eligibility from "./Pages/Eligibility";
-import StaffDashboard from "./Pages/staff/StaffDashboard";
-import StudentList from "./Pages/staff/StudentList";
-import DocumentReview from "./Pages/staff/DocumentReview";
+import Home from "./pages/Home";
+import Eligibility from "./pages/Eligibility";
+import StudentInfo from "./pages/StudentInfo";
+import UploadDocuments from "./pages/UploadDocuments";
+
+import StaffDashboard from "./pages/staff/StaffDashboard";
 
 function App() {
   const [page, setPage] = useState("home");
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [loanData, setLoanData] = useState(null);
 
   const [user] = useState({
     name: "นักศึกษา",
     role: "student",
   });
+
+  const [loanData, setLoanData] = useState(null);
+
+  console.log("loanData:", loanData);
 
   const [studentData] = useState({
     fullname: "นางสาวนักศึกษา ทดสอบ",
@@ -25,7 +28,7 @@ function App() {
     yearLevel: "2",
   });
 
-  const [students, setStudents] = useState([
+  const [students] = useState([
     {
       id: 1,
       studentId: "6810110001",
@@ -33,8 +36,6 @@ function App() {
       faculty: "คณะวิทยาศาสตร์",
       major: "วิทยาการคอมพิวเตอร์",
       year: 1,
-      semester: 1,
-      borrowerTypeCode: "NEW",
       borrowerType: "ผู้กู้รายใหม่",
       gpax: 2.85,
       volunteerHours: 12,
@@ -44,7 +45,6 @@ function App() {
       documents: [
         {
           id: 101,
-          category: "GPAX_EVIDENCE",
           name: "หลักฐานผลการเรียน GPAX",
           fileName: "gpax-6810110001.pdf",
           status: "รอตรวจสอบ",
@@ -52,7 +52,6 @@ function App() {
         },
         {
           id: 102,
-          category: "VOLUNTEER_EVIDENCE",
           name: "หลักฐานชั่วโมงจิตอาสา",
           fileName: "volunteer-6810110001.pdf",
           status: "รอตรวจสอบ",
@@ -60,41 +59,15 @@ function App() {
         },
         {
           id: 103,
-          category: "LOAN_CONTRACT",
-          name: "สัญญากู้ยืมเงิน",
-          fileName: "loan-contract-6810110001.pdf",
+          name: "สำเนาบัตรประชาชน",
+          fileName: "citizen-card-6810110001.jpg",
           status: "รอตรวจสอบ",
           remark: "",
         },
         {
           id: 104,
-          category: "WITHDRAWAL_FORM",
-          name: "ใบเบิกเงิน",
-          fileName: "withdrawal-form-6810110001.pdf",
-          status: "รอตรวจสอบ",
-          remark: "",
-        },
-        {
-          id: 105,
-          category: "STUDENT_ID_CARD",
-          name: "สำเนาบัตรประจำตัวประชาชนผู้กู้",
-          fileName: "student-id-card-6810110001.jpg",
-          status: "รอตรวจสอบ",
-          remark: "",
-        },
-        {
-          id: 106,
-          category: "PARENT_PHOTO",
-          name: "รูปถ่ายผู้ปกครอง",
-          fileName: "parent-photo-6810110001.jpg",
-          status: "รอตรวจสอบ",
-          remark: "",
-        },
-        {
-          id: 107,
-          category: "PARENT_ID_CARD",
-          name: "สำเนาบัตรประจำตัวประชาชนผู้ปกครอง",
-          fileName: "parent-id-card-6810110001.jpg",
+          name: "สัญญากู้ยืมเงิน",
+          fileName: "loan-contract-6810110001.pdf",
           status: "รอตรวจสอบ",
           remark: "",
         },
@@ -107,8 +80,6 @@ function App() {
       faculty: "คณะวิศวกรรมศาสตร์",
       major: "วิศวกรรมคอมพิวเตอร์",
       year: 2,
-      semester: 1,
-      borrowerTypeCode: "CONTINUING_YEAR",
       borrowerType: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
       gpax: 2.42,
       volunteerHours: 40,
@@ -118,7 +89,6 @@ function App() {
       documents: [
         {
           id: 201,
-          category: "GPAX_EVIDENCE",
           name: "หลักฐานผลการเรียน GPAX",
           fileName: "gpax-6810110002.pdf",
           status: "ผ่าน",
@@ -126,7 +96,6 @@ function App() {
         },
         {
           id: 202,
-          category: "VOLUNTEER_EVIDENCE",
           name: "หลักฐานชั่วโมงจิตอาสา",
           fileName: "volunteer-6810110002.jpg",
           status: "ต้องแก้ไข",
@@ -134,17 +103,8 @@ function App() {
         },
         {
           id: 203,
-          category: "WITHDRAWAL_FORM",
           name: "ใบเบิกเงิน",
           fileName: "withdrawal-form-6810110002.pdf",
-          status: "รอตรวจสอบ",
-          remark: "",
-        },
-        {
-          id: 204,
-          category: "STUDENT_ID_CARD",
-          name: "สำเนาบัตรประจำตัวประชาชนผู้กู้",
-          fileName: "student-id-card-6810110002.jpg",
           status: "รอตรวจสอบ",
           remark: "",
         },
@@ -157,28 +117,31 @@ function App() {
       faculty: "คณะทรัพยากรธรรมชาติ",
       major: "เกษตรศาสตร์",
       year: 3,
-      semester: 2,
-      borrowerTypeCode: "CONTINUING_SPECIAL",
-      borrowerType: "ผู้กู้ต่อเนื่องกรณีพิเศษ",
-      gpax: null,
-      volunteerHours: null,
+      borrowerType: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
+      gpax: 3.12,
+      volunteerHours: 45,
       age: 21,
       submittedDate: "18 กรกฎาคม 2569",
       status: "ผ่าน",
       documents: [
         {
           id: 301,
-          category: "WITHDRAWAL_FORM",
-          name: "ใบเบิกเงิน",
-          fileName: "withdrawal-form-6810110003.pdf",
+          name: "หลักฐานผลการเรียน GPAX",
+          fileName: "gpax-6810110003.pdf",
           status: "ผ่าน",
           remark: "",
         },
         {
           id: 302,
-          category: "STUDENT_ID_CARD",
-          name: "สำเนาบัตรประจำตัวประชาชนผู้กู้",
-          fileName: "student-id-card-6810110003.jpg",
+          name: "หลักฐานชั่วโมงจิตอาสา",
+          fileName: "volunteer-6810110003.pdf",
+          status: "ผ่าน",
+          remark: "",
+        },
+        {
+          id: 303,
+          name: "ใบเบิกเงิน",
+          fileName: "withdrawal-form-6810110003.pdf",
           status: "ผ่าน",
           remark: "",
         },
@@ -192,19 +155,40 @@ function App() {
       no: 1,
       title: "การเข้าร่วมกิจกรรมจิตอาสา",
       description:
-        "นักศึกษาผู้กู้ยืมต้องเข้าร่วมกิจกรรมจิตอาสาและสะสมชั่วโมงตามเกณฑ์ที่กำหนด",
-      dateText: "ภาคเรียนที่ 1",
+        "นักศึกษาผู้กู้ยืมต้องเข้าร่วมกิจกรรมจิตอาสาและสะสมชั่วโมงตามเกณฑ์ที่กำหนด โดยผู้กู้รายใหม่ต้องมีไม่น้อยกว่า 2 ชั่วโมง และผู้กู้ต่อเนื่องต้องมีไม่น้อยกว่า 36 ชั่วโมง",
+      dateText:
+        "ช่วงเวลาดำเนินกิจกรรม : ตั้งแต่วันที่ 1 มกราคม 2568 – 20 มีนาคม 2569",
       color: "pink",
       active: true,
     },
     {
       id: 2,
       no: 2,
-      title: "ตรวจสอบความถูกต้องของข้อมูล",
+      title: "ตรวจสอบความถูกต้องของข้อมูลการบันทึกจิตอาสา",
       description:
-        "ตรวจสอบข้อมูล GPAX ชั่วโมงจิตอาสา และเอกสารประกอบให้ครบถ้วนก่อนส่ง",
-      dateText: "ระบบคัดกรองคุณสมบัติ",
+        "นักศึกษาตรวจสอบข้อมูลกิจกรรมจิตอาสาให้ถูกต้องครบถ้วน และอัปโหลดหลักฐานประกอบก่อนส่งข้อมูลเข้าสู่ระบบ",
+      dateText: "ภายในวันที่ 20 มีนาคม 2569",
       color: "green",
+      active: true,
+    },
+    {
+      id: 3,
+      no: 3,
+      title: "ตรวจสอบผลรายงานสถานภาพการศึกษา",
+      description:
+        "ระบบจะตรวจสอบสถานภาพการศึกษาและรายงานข้อมูลที่เกี่ยวข้อง เพื่อใช้ประกอบการพิจารณาคุณสมบัติของผู้กู้ยืม",
+      dateText: "ภายในวันที่ 15 เมษายน 2569 - 30 พฤษภาคม 2569",
+      color: "purple",
+      active: true,
+    },
+    {
+      id: 4,
+      no: 4,
+      title: "คัดกรองคุณสมบัติ",
+      description:
+        "กรอกข้อมูลประเภทผู้กู้ เกรดเฉลี่ยสะสม และชั่วโมงจิตอาสา พร้อมแนบไฟล์หลักฐาน GPAX และหลักฐานชั่วโมงจิตอาสา",
+      dateText: "ระบบคัดกรองคุณสมบัติ",
+      color: "orange",
       active: true,
     },
   ]);
@@ -215,65 +199,63 @@ function App() {
       return;
     }
 
-    if (
-      targetPage === "studentInfo" ||
-      targetPage === "studentDashboard" ||
-      targetPage === "eligibility"
-    ) {
+    if (targetPage === "studentInfo") {
+      setPage("studentInfo");
+      return;
+    }
+
+    if (targetPage === "eligibility") {
       setPage("eligibility");
       return;
     }
 
     if (
-      targetPage === "staff" ||
-      targetPage === "staffDashboard"
-    ) {
+  targetPage === "uploadDocuments" ||
+  targetPage === "myDocuments"
+) {
+  setPage("uploadDocuments");
+  return;
+}
+
+    if (targetPage === "staffDashboard") {
       setPage("staffDashboard");
       return;
     }
 
-    if (targetPage === "studentList") {
-      setPage("studentList");
-      return;
-    }
-
-    if (targetPage === "documentReview") {
-      setPage("studentList");
-      return;
-    }
-
-    alert(`หน้านี้ยังไม่ได้สร้าง: ${targetPage}`);
+    alert("หน้านี้ยังไม่ได้สร้าง");
   };
 
-  const openStudentReview = (student) => {
-    setSelectedStudent(student);
-    setPage("documentReview");
+  const openStudentReview = () => {
+    alert("ยังไม่ได้สร้างหน้า StudentList และ DocumentReview");
   };
 
-  const saveStudentReview = (updatedStudent) => {
-    setStudents((currentStudents) =>
-      currentStudents.map((student) =>
-        student.id === updatedStudent.id
-          ? updatedStudent
-          : student
-      )
+  if (page === "studentInfo") {
+    return (
+      <StudentInfo
+        goProtectedPage={goProtectedPage}
+        setPage={setPage}
+      />
     );
-
-    setSelectedStudent(updatedStudent);
-    alert("บันทึกผลการตรวจสอบเรียบร้อยแล้ว");
-    setPage("studentList");
-  };
+  }
 
   if (page === "eligibility") {
     return (
       <Eligibility
         setPage={setPage}
-        goProtectedPage={goProtectedPage}
         setLoanData={setLoanData}
         studentData={studentData}
       />
     );
   }
+  
+   if (page === "uploadDocuments") {
+  return (
+    <UploadDocuments
+      goProtectedPage={goProtectedPage}
+      setPage={setPage}
+    />
+  );
+}
 
   if (page === "staffDashboard") {
     return (
@@ -285,33 +267,11 @@ function App() {
     );
   }
 
-  if (page === "studentList") {
-    return (
-      <StudentList
-        students={students}
-        setPage={setPage}
-        openStudentReview={openStudentReview}
-      />
-    );
-  }
-
-  if (page === "documentReview") {
-    return (
-      <DocumentReview
-        student={selectedStudent || students[0]}
-        setPage={setPage}
-        onSave={saveStudentReview}
-      />
-    );
-  }
-
   return (
     <Home
-      setPage={setPage}
       goProtectedPage={goProtectedPage}
       user={user}
       homeContents={homeContents}
-      students={students}
     />
   );
 }
