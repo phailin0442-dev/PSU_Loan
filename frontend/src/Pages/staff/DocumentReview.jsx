@@ -6,7 +6,7 @@ import {
     getRequiredDocumentCategories,
     normalizeStatus,
     requiresQualificationCheck,
-} from "./documentRules";
+} from "../../rules/documentRules";
 
 function DocumentReview({
     student,
@@ -285,11 +285,11 @@ function DocumentReview({
                                         )
                                     }
                                     className={`w-full rounded-2xl border p-4 text-left ${!row.document
-                                            ? "cursor-not-allowed border-red-200 bg-red-50"
-                                            : activeDocument?.id ===
-                                                row.document.id
-                                                ? "border-[#07116f] bg-blue-50"
-                                                : "border-gray-100 hover:bg-blue-50/40"
+                                        ? "cursor-not-allowed border-red-200 bg-red-50"
+                                        : activeDocument?.id ===
+                                            row.document.id
+                                            ? "border-[#07116f] bg-blue-50"
+                                            : "border-gray-100 hover:bg-blue-50/40"
                                         }`}
                                 >
                                     <div className="flex items-start justify-between gap-3">
