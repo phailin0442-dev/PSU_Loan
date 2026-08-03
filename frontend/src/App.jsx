@@ -63,6 +63,18 @@ function AppContent() {
       return;
     }
 
+    if (
+      targetPage === "booking" &&
+      !selectedStudent?.documentsCompleted
+    ) {
+      alert(
+        "กรุณาอัปโหลดเอกสารให้ครบก่อน"
+      );
+
+      setPage("uploadDocuments");
+      return;
+    }
+
     setPage(targetPage);
   };
 

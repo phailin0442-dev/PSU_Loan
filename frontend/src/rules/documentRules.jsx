@@ -11,6 +11,69 @@ export const DOCUMENT_TYPES = {
         "รูปถ่ายผู้ปกครองขณะลงนาม",
 };
 
+/*
+|--------------------------------------------------------------------------
+| Backend (DB document_code) <-> Frontend (category ที่ใช้เดิม) alias
+|--------------------------------------------------------------------------
+| ฝั่ง backend ตั้งชื่อ document_code ว่า DISBURSEMENT_FORM (ตรงกับ
+| document_types ใน DatabaseV2.sql) แต่ frontend ใช้ WITHDRAWAL_FORM
+| มาตั้งแต่แรก เพื่อไม่ต้องไล่แก้ทุกจุดที่อ้างอิง WITHDRAWAL_FORM
+| (DOCUMENT_TYPES, documentRules, DocumentReview, UploadDocuments)
+| จึงแปลงค่าตรงจุดที่คุยกับ backend แทน
+|--------------------------------------------------------------------------
+*/
+
+export function mapBackendCodeToCategory(documentCode) {
+    if (documentCode === "DISBURSEMENT_FORM") {
+        return "WITHDRAWAL_FORM";
+    }
+
+    return documentCode;
+}
+
+export function mapCategoryToBackendCode(category) {
+    if (category === "WITHDRAWAL_FORM") {
+        return "DISBURSEMENT_FORM";
+    }
+
+    return category;
+}
+
+// แปลงสถานะ enum จาก DB (document_review_status_code) เป็น label ภาษาไทย
+// ที่ frontend ใช้อยู่เดิม — "ยังไม่อัปโหลด" ปล่อยผ่านตรงๆ เพราะไม่ใช่ enum จริง
+// (เป็นค่า COALESCE ที่ backend ใส่มาเองตอนยังไม่มีไฟล์)
+export function mapBackendStatusToLabel(backendStatus) {
+    const map = {
+        PENDING: "รอตรวจสอบ",
+        APPROVED: "ผ่าน",
+        REVISION_REQUIRED: "ต้องแก้ไข",
+        REJECTED: "ต้องแก้ไข",
+    };
+
+    return map[backendStatus] || backendStatus || "รอตรวจสอบ";
+}
+
+// แปลงสถานะคำร้องทั้งใบ (application_status_code จาก DB) เป็นข้อความไทย
+// ให้หน้าตาตรงกับที่ mockData.js เดิมเคยใช้ เช่น "รอตรวจสอบเอกสาร"
+export function mapApplicationStatusToLabel(applicationStatusCode) {
+    const map = {
+        DRAFT: "ร่างคำร้อง ยังไม่ส่ง",
+        SUBMITTED: "ส่งคำร้องแล้ว รอตรวจสอบ",
+        ELIGIBILITY_REVIEW: "กำลังตรวจสอบคุณสมบัติ",
+        ELIGIBILITY_FAILED: "ไม่ผ่านคุณสมบัติ",
+        DOCUMENT_REVIEW: "รอตรวจสอบเอกสาร",
+        REVISION_REQUIRED: "ต้องแก้ไขเอกสาร",
+        DOCUMENT_APPROVED: "เอกสารผ่านการตรวจสอบ",
+        QUEUE_BOOKED: "จองคิวลงนามแล้ว",
+        SIGNED: "ลงนามเรียบร้อยแล้ว",
+        CENTRAL_SUBMITTED: "ส่งเรื่องให้ส่วนกลางแล้ว",
+        COMPLETED: "ดำเนินการเสร็จสิ้น",
+        CANCELLED: "ยกเลิกคำร้อง",
+    };
+
+    return map[applicationStatusCode] || applicationStatusCode || "-";
+}
+
 export const QUALIFICATION_TYPES = {
     GPAX_EVIDENCE:
         DOCUMENT_TYPES.GPAX_EVIDENCE,
@@ -173,6 +236,21 @@ export function getRequiredDocumentCategories(
     }
 
     return [...new Set(categories)];
+}
+
+// หา requirement ของ backend (มี requirementId/documentId จริง) จาก category
+// ที่ frontend ใช้ — ต้องแปลงชื่อกลับเป็น backend code ก่อนเทียบ
+export function getBackendRequirementByCategory(
+    requiredDocumentsFromBackend = [],
+    category
+) {
+    const backendCode = mapCategoryToBackendCode(category);
+
+    return (
+        requiredDocumentsFromBackend.find(
+            (item) => item.documentCode === backendCode
+        ) || null
+    );
 }
 
 export function getDocumentByCategory(

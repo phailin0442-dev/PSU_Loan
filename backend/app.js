@@ -6,6 +6,7 @@ const pool = require("./config/db");
 const homeRoutes = require("./routes/home");
 const studentRoutes = require("./routes/student");
 const staffRoutes = require("./routes/staff");
+const documentRoutes = require("./routes/document");
 
 
 const app = express();
@@ -51,6 +52,7 @@ app.get("/api/db-test", async (req, res) => {
 
 app.use("/api/home", homeRoutes);
 app.use("/api/student", studentRoutes);
+app.use("/api/student", documentRoutes);
 app.use("/api/staff", staffRoutes);
 
 app.use(
