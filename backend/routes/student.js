@@ -113,13 +113,23 @@ router.get("/:id", async (req, res) => {
                 ad.original_file_name AS "fileName",
                 COALESCE(ad.review_status::TEXT, 'ยังไม่อัปโหลด') AS status,
                 ad.latest_remark AS note,
-                ad.uploaded_at AS "uploadedAt"
+                ad.uploaded_at AS "uploadedAt",
+                COALESCE(rejection_stats.rejection_count, 0)::INTEGER AS "rejectionCount"
             FROM psu_loan.document_requirements dr
             JOIN psu_loan.document_types dt ON dt.document_type_id = dr.document_type_id
             LEFT JOIN psu_loan.application_documents ad
                 ON ad.requirement_id = dr.requirement_id
                 AND ad.application_id = $1
                 AND ad.is_current = TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS rejection_count
+                FROM psu_loan.document_review_history drh
+                JOIN psu_loan.application_documents all_versions
+                    ON all_versions.document_id = drh.document_id
+                WHERE all_versions.application_id = $1
+                  AND all_versions.requirement_id = dr.requirement_id
+                  AND drh.new_status = 'REVISION_REQUIRED'
+            ) rejection_stats ON TRUE
             WHERE dr.loan_type_id = $2
               AND dr.academic_year = $3
               AND dr.semester = $4
@@ -136,12 +146,58 @@ router.get("/:id", async (req, res) => {
             application.age,
         ]);
 
+        // ประวัติการเปลี่ยนสถานะคำร้องทั้งใบ (เขียนอัตโนมัติผ่าน trigger
+        // trg_application_status_history ทุกครั้งที่ application_status
+        // เปลี่ยน) ใช้แสดงในหน้า "ติดตามสถานะ" ฝั่งนักศึกษา
+        const statusHistoryQuery = `
+            SELECT
+                old_status AS "oldStatus",
+                new_status AS "newStatus",
+                remark,
+                changed_at AS "changedAt"
+            FROM psu_loan.application_status_history
+            WHERE application_id = $1
+            ORDER BY changed_at ASC
+        `;
+        const statusHistoryResult = await pool.query(statusHistoryQuery, [
+            applicationId,
+        ]);
+
+        // ประวัติการตรวจ/ตีกลับ "รายไฟล์" แบบละเอียด — ต่างจาก statusHistory
+        // ด้านบนที่เก็บแค่สถานะรวมทั้งใบ อันนี้บอกได้ว่า "ไฟล์ไหน" "รอบที่
+        // เท่าไหร่" "ใครตรวจ" "เหตุผลอะไร" ดึงข้ามทุกเวอร์ชันของทุกเอกสาร
+        // ในคำร้องนี้มารวมกันเรียงตามเวลา
+        const documentReviewHistoryQuery = `
+            SELECT
+                drh.review_round AS "round",
+                drh.old_status AS "oldStatus",
+                drh.new_status AS "newStatus",
+                drh.remark AS reason,
+                drh.reviewed_at AS "reviewedAt",
+                CONCAT_WS(' ', sf.prefix, sf.first_name, sf.last_name) AS "reviewedByName",
+                dt.document_name AS "documentName",
+                ad.version_no AS "versionNo"
+            FROM psu_loan.document_review_history drh
+            JOIN psu_loan.application_documents ad ON ad.document_id = drh.document_id
+            JOIN psu_loan.document_requirements dr ON dr.requirement_id = ad.requirement_id
+            JOIN psu_loan.document_types dt ON dt.document_type_id = dr.document_type_id
+            LEFT JOIN psu_loan.staff_profiles sf ON sf.staff_id = drh.reviewed_by
+            WHERE ad.application_id = $1
+            ORDER BY drh.reviewed_at ASC
+        `;
+        const documentReviewHistoryResult = await pool.query(
+            documentReviewHistoryQuery,
+            [applicationId]
+        );
+
         res.status(200).json({
             success: true,
             data: {
                 ...application,
                 parent,
                 requiredDocuments: documentsResult.rows,
+                statusHistory: statusHistoryResult.rows,
+                documentReviewHistory: documentReviewHistoryResult.rows,
             },
         });
     } catch (error) {

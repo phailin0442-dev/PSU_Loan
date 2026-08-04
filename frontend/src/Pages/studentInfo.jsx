@@ -18,6 +18,19 @@ function StudentInfo({ setPage }) {
     const [formData, setFormData] =
         useState(selectedStudent || {});
 
+    // แท็บที่เปิดอยู่ตอนนี้ (0-6) — ให้กรอกทีละหัวข้อแทนเลื่อนยาว
+    const [activeSection, setActiveSection] = useState(0);
+
+    const sections = [
+        { icon: "👤", label: "ข้อมูลส่วนบุคคล" },
+        { icon: "🏫", label: "ข้อมูลการศึกษา" },
+        { icon: "👨", label: "ข้อมูลบิดา" },
+        { icon: "👩", label: "ข้อมูลมารดา" },
+        { icon: "🧑", label: "ข้อมูลผู้ปกครอง" },
+        { icon: "🏠", label: "ข้อมูลครอบครัว" },
+        { icon: "📋", label: "ข้อมูลการกู้ยืม" },
+    ];
+
     const [message, setMessage] =
         useState("");
 
@@ -47,20 +60,24 @@ function StudentInfo({ setPage }) {
     const handleSubmit = (event) => {
         event.preventDefault();
 
-        const requiredFields = [
-            "firstName",
-            "lastName",
-            "citizenId",
-            "birthDate",
-            "phone",
-            "email",
-            "address",
-            "faculty",
-            "major",
-            "yearLevel",
-            "semester",
-            "loanTypeCode",
-        ];
+        // แม็ปฟิลด์บังคับไปยังแท็บที่ฟิลด์นั้นอยู่ ใช้กระโดดไปแท็บที่ขาด
+        // ข้อมูลให้อัตโนมัติ จะได้ไม่งงว่ากรอกไม่ครบตรงไหน
+        const requiredFieldTabs = {
+            firstName: 0,
+            lastName: 0,
+            citizenId: 0,
+            birthDate: 0,
+            phone: 0,
+            email: 0,
+            address: 0,
+            faculty: 1,
+            major: 1,
+            yearLevel: 1,
+            semester: 1,
+            loanTypeCode: 6,
+        };
+
+        const requiredFields = Object.keys(requiredFieldTabs);
 
         const missingFields =
             requiredFields.filter(
@@ -71,6 +88,14 @@ function StudentInfo({ setPage }) {
             );
 
         if (missingFields.length > 0) {
+            const firstMissingTab = Math.min(
+                ...missingFields.map(
+                    (field) => requiredFieldTabs[field]
+                )
+            );
+
+            setActiveSection(firstMissingTab);
+
             setMessage(
                 "กรุณากรอกข้อมูลที่มีเครื่องหมาย * ให้ครบถ้วน"
             );
@@ -203,701 +228,774 @@ function StudentInfo({ setPage }) {
 
                 <form
                     onSubmit={handleSubmit}
-                    className="mt-7 space-y-7"
+                    className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-start"
                 >
-                    <FormSection
-                        icon="👤"
-                        title="ข้อมูลส่วนบุคคล"
-                        subtitle="ข้อมูลทั่วไปของนักศึกษาผู้ยื่นคำขอกู้"
-                    >
-                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                            <SelectInput
-                                label="คำนำหน้าชื่อ"
-                                name="prefix"
-                                value={
-                                    formData.prefix
+                    {/* Sidebar เลือกหัวข้อ */}
+                    <nav className="flex gap-2 overflow-x-auto rounded-2xl bg-white p-3 shadow-sm lg:sticky lg:top-6 lg:w-64 lg:shrink-0 lg:flex-col lg:overflow-visible">
+                        {sections.map((section, index) => (
+                            <button
+                                key={section.label}
+                                type="button"
+                                onClick={() =>
+                                    setActiveSection(index)
                                 }
-                                onChange={
-                                    handleChange
-                                }
-                                options={[
-                                    {
-                                        value: "",
-                                        label: "เลือกคำนำหน้าชื่อ",
-                                    },
-                                    {
-                                        value: "นาย",
-                                        label: "นาย",
-                                    },
-                                    {
-                                        value: "นางสาว",
-                                        label: "นางสาว",
-                                    },
-                                    {
-                                        value: "นาง",
-                                        label: "นาง",
-                                    },
-                                ]}
-                            />
+                                className={`flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black transition lg:shrink ${activeSection === index
+                                        ? "bg-[#07116f] text-white shadow-md"
+                                        : "text-gray-600 hover:bg-blue-50"
+                                    }`}
+                            >
+                                <span className="text-lg">
+                                    {section.icon}
+                                </span>
+                                <span className="whitespace-nowrap lg:whitespace-normal">
+                                    {section.label}
+                                </span>
+                            </button>
+                        ))}
+                    </nav>
 
-                            <Input
-                                label="ชื่อ"
-                                required
-                                name="firstName"
-                                value={
-                                    formData.firstName
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="กรอกชื่อ"
-                            />
+                    {/* เนื้อหาของแท็บที่เลือก */}
+                    <div className="min-w-0 flex-1 space-y-6">
+                        {activeSection === 0 && (
+                            <FormSection
+                                icon="👤"
+                                title="ข้อมูลส่วนบุคคล"
+                                subtitle="ข้อมูลทั่วไปของนักศึกษาผู้ยื่นคำขอกู้"
+                            >
+                                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                    <SelectInput
+                                        label="คำนำหน้าชื่อ"
+                                        name="prefix"
+                                        value={
+                                            formData.prefix
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        options={[
+                                            {
+                                                value: "",
+                                                label: "เลือกคำนำหน้าชื่อ",
+                                            },
+                                            {
+                                                value: "นาย",
+                                                label: "นาย",
+                                            },
+                                            {
+                                                value: "นางสาว",
+                                                label: "นางสาว",
+                                            },
+                                            {
+                                                value: "นาง",
+                                                label: "นาง",
+                                            },
+                                        ]}
+                                    />
 
-                            <Input
-                                label="นามสกุล"
-                                required
-                                name="lastName"
-                                value={
-                                    formData.lastName
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="กรอกนามสกุล"
-                            />
+                                    <Input
+                                        label="ชื่อ"
+                                        required
+                                        name="firstName"
+                                        value={
+                                            formData.firstName
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="กรอกชื่อ"
+                                    />
 
-                            <Input
-                                label="เลขประจำตัวประชาชน"
-                                required
-                                name="citizenId"
-                                value={
-                                    formData.citizenId
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="เลขประจำตัวประชาชน 13 หลัก"
-                                maxLength={13}
-                                inputMode="numeric"
-                            />
+                                    <Input
+                                        label="นามสกุล"
+                                        required
+                                        name="lastName"
+                                        value={
+                                            formData.lastName
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="กรอกนามสกุล"
+                                    />
 
-                            <Input
-                                label="วันเดือนปีเกิด"
-                                required
-                                name="birthDate"
-                                type="date"
-                                value={
-                                    formData.birthDate
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                            />
+                                    <Input
+                                        label="เลขประจำตัวประชาชน"
+                                        required
+                                        name="citizenId"
+                                        value={
+                                            formData.citizenId
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="เลขประจำตัวประชาชน 13 หลัก"
+                                        maxLength={13}
+                                        inputMode="numeric"
+                                    />
 
-                            <Input
-                                label="สัญชาติ"
-                                name="nationality"
-                                value={
-                                    formData.nationality
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="เช่น ไทย"
-                            />
+                                    <Input
+                                        label="วันเดือนปีเกิด"
+                                        required
+                                        name="birthDate"
+                                        type="date"
+                                        value={
+                                            formData.birthDate
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                    />
 
-                            <Input
-                                label="ศาสนา"
-                                name="religion"
-                                value={
-                                    formData.religion
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="ระบุศาสนา"
-                            />
+                                    <Input
+                                        label="สัญชาติ"
+                                        name="nationality"
+                                        value={
+                                            formData.nationality
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="เช่น ไทย"
+                                    />
 
-                            <SelectInput
-                                label="สถานภาพ"
-                                name="maritalStatus"
-                                value={
-                                    formData.maritalStatus
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                options={[
-                                    {
-                                        value: "",
-                                        label: "เลือกสถานภาพ",
-                                    },
-                                    {
-                                        value: "โสด",
-                                        label: "โสด",
-                                    },
-                                    {
-                                        value: "สมรส",
-                                        label: "สมรส",
-                                    },
-                                    {
-                                        value: "หย่าร้าง",
-                                        label: "หย่าร้าง",
-                                    },
-                                    {
-                                        value: "หม้าย",
-                                        label: "หม้าย",
-                                    },
-                                ]}
-                            />
+                                    <Input
+                                        label="ศาสนา"
+                                        name="religion"
+                                        value={
+                                            formData.religion
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="ระบุศาสนา"
+                                    />
 
-                            <Input
-                                label="หมายเลขโทรศัพท์"
-                                required
-                                name="phone"
-                                value={
-                                    formData.phone
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="08XXXXXXXX"
-                                inputMode="tel"
-                            />
+                                    <SelectInput
+                                        label="สถานภาพ"
+                                        name="maritalStatus"
+                                        value={
+                                            formData.maritalStatus
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        options={[
+                                            {
+                                                value: "",
+                                                label: "เลือกสถานภาพ",
+                                            },
+                                            {
+                                                value: "โสด",
+                                                label: "โสด",
+                                            },
+                                            {
+                                                value: "สมรส",
+                                                label: "สมรส",
+                                            },
+                                            {
+                                                value: "หย่าร้าง",
+                                                label: "หย่าร้าง",
+                                            },
+                                            {
+                                                value: "หม้าย",
+                                                label: "หม้าย",
+                                            },
+                                        ]}
+                                    />
 
-                            <Input
-                                label="อีเมล"
-                                required
-                                name="email"
-                                type="email"
-                                value={
-                                    formData.email
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="example@email.com"
-                            />
+                                    <Input
+                                        label="หมายเลขโทรศัพท์"
+                                        required
+                                        name="phone"
+                                        value={
+                                            formData.phone
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="08XXXXXXXX"
+                                        inputMode="tel"
+                                    />
 
-                            <Input
-                                label="จังหวัด"
-                                name="province"
-                                value={
-                                    formData.province
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="ระบุจังหวัด"
-                            />
+                                    <Input
+                                        label="อีเมล"
+                                        required
+                                        name="email"
+                                        type="email"
+                                        value={
+                                            formData.email
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="example@email.com"
+                                    />
 
-                            <Input
-                                label="รหัสไปรษณีย์"
-                                name="postalCode"
-                                value={
-                                    formData.postalCode
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="รหัสไปรษณีย์"
-                                maxLength={5}
-                                inputMode="numeric"
-                            />
+                                    <Input
+                                        label="จังหวัด"
+                                        name="province"
+                                        value={
+                                            formData.province
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="ระบุจังหวัด"
+                                    />
 
-                            <div className="md:col-span-2 xl:col-span-3">
-                                <Textarea
-                                    label="ที่อยู่ปัจจุบัน"
-                                    required
-                                    name="address"
-                                    value={
-                                        formData.address
-                                    }
+                                    <Input
+                                        label="รหัสไปรษณีย์"
+                                        name="postalCode"
+                                        value={
+                                            formData.postalCode
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="รหัสไปรษณีย์"
+                                        maxLength={5}
+                                        inputMode="numeric"
+                                    />
+
+                                    <div className="md:col-span-2 xl:col-span-3">
+                                        <Textarea
+                                            label="ที่อยู่ปัจจุบัน"
+                                            required
+                                            name="address"
+                                            value={
+                                                formData.address
+                                            }
+                                            onChange={
+                                                handleChange
+                                            }
+                                            placeholder="บ้านเลขที่ หมู่ ถนน ตำบล อำเภอ จังหวัด"
+                                        />
+                                    </div>
+                                </div>
+                            </FormSection>
+                        )}
+
+                        {activeSection === 1 && (
+                            <FormSection
+                                icon="🏫"
+                                title="ข้อมูลการศึกษา"
+                                subtitle="ข้อมูลสถานภาพนักศึกษาและภาคการศึกษาปัจจุบัน"
+                            >
+                                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                    <Input
+                                        label="รหัสนักศึกษา"
+                                        name="studentId"
+                                        value={
+                                            formData.studentId
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="กรอกรหัสนักศึกษา"
+                                    />
+
+                                    <Input
+                                        label="คณะ"
+                                        required
+                                        name="faculty"
+                                        value={
+                                            formData.faculty
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="ระบุคณะ"
+                                    />
+
+                                    <Input
+                                        label="สาขาวิชา"
+                                        required
+                                        name="major"
+                                        value={
+                                            formData.major
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="ระบุสาขาวิชา"
+                                    />
+
+                                    <SelectInput
+                                        label="ชั้นปี"
+                                        required
+                                        name="yearLevel"
+                                        value={
+                                            formData.yearLevel
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        options={[
+                                            {
+                                                value: "",
+                                                label: "เลือกชั้นปี",
+                                            },
+                                            {
+                                                value: "1",
+                                                label: "ชั้นปีที่ 1",
+                                            },
+                                            {
+                                                value: "2",
+                                                label: "ชั้นปีที่ 2",
+                                            },
+                                            {
+                                                value: "3",
+                                                label: "ชั้นปีที่ 3",
+                                            },
+                                            {
+                                                value: "4",
+                                                label: "ชั้นปีที่ 4",
+                                            },
+                                            {
+                                                value: "5",
+                                                label: "ชั้นปีที่ 5",
+                                            },
+                                            {
+                                                value: "6",
+                                                label: "ชั้นปีที่ 6",
+                                            },
+                                        ]}
+                                    />
+
+                                    <Input
+                                        label="ปีการศึกษา"
+                                        name="academicYear"
+                                        value={
+                                            formData.academicYear
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="เช่น 2569"
+                                        inputMode="numeric"
+                                    />
+
+                                    <SelectInput
+                                        label="ภาคการศึกษา"
+                                        required
+                                        name="semester"
+                                        value={
+                                            formData.semester
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        options={[
+                                            {
+                                                value: "1",
+                                                label: "ภาคการศึกษาที่ 1",
+                                            },
+                                            {
+                                                value: "2",
+                                                label: "ภาคการศึกษาที่ 2",
+                                            },
+                                        ]}
+                                    />
+                                </div>
+                            </FormSection>
+                        )}
+
+                        {activeSection === 2 && (
+                            <FormSection
+                                icon="👨"
+                                title="ข้อมูลบิดา"
+                                subtitle="ข้อมูลส่วนบุคคล อาชีพ และรายได้ของบิดา"
+                            >
+                                <ParentFields
+                                    type="father"
+                                    formData={formData}
                                     onChange={
                                         handleChange
                                     }
-                                    placeholder="บ้านเลขที่ หมู่ ถนน ตำบล อำเภอ จังหวัด"
+                                    defaultPrefix="นาย"
                                 />
-                            </div>
-                        </div>
-                    </FormSection>
+                            </FormSection>
+                        )}
 
-                    <FormSection
-                        icon="🏫"
-                        title="ข้อมูลการศึกษา"
-                        subtitle="ข้อมูลสถานภาพนักศึกษาและภาคการศึกษาปัจจุบัน"
-                    >
-                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                            <Input
-                                label="รหัสนักศึกษา"
-                                name="studentId"
-                                value={
-                                    formData.studentId
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="กรอกรหัสนักศึกษา"
-                            />
+                        {activeSection === 3 && (
+                            <FormSection
+                                icon="👩"
+                                title="ข้อมูลมารดา"
+                                subtitle="ข้อมูลส่วนบุคคล อาชีพ และรายได้ของมารดา"
+                            >
+                                <ParentFields
+                                    type="mother"
+                                    formData={formData}
+                                    onChange={
+                                        handleChange
+                                    }
+                                    defaultPrefix="นาง"
+                                />
+                            </FormSection>
+                        )}
 
-                            <Input
-                                label="คณะ"
-                                required
-                                name="faculty"
-                                value={
-                                    formData.faculty
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="ระบุคณะ"
-                            />
+                        {activeSection === 4 && (
+                            <FormSection
+                                icon="🧑"
+                                title="ข้อมูลผู้ปกครอง"
+                                subtitle="กรอกกรณีผู้ปกครองไม่ใช่บิดาหรือมารดา หรือเป็นผู้ดูแลหลัก"
+                            >
+                                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                    <SelectInput
+                                        label="ความสัมพันธ์กับนักศึกษา"
+                                        name="guardianRelation"
+                                        value={
+                                            formData.guardianRelation
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        options={[
+                                            {
+                                                value: "",
+                                                label: "เลือกความสัมพันธ์",
+                                            },
+                                            {
+                                                value: "บิดา",
+                                                label: "บิดา",
+                                            },
+                                            {
+                                                value: "มารดา",
+                                                label: "มารดา",
+                                            },
+                                            {
+                                                value: "ปู่",
+                                                label: "ปู่",
+                                            },
+                                            {
+                                                value: "ย่า",
+                                                label: "ย่า",
+                                            },
+                                            {
+                                                value: "ตา",
+                                                label: "ตา",
+                                            },
+                                            {
+                                                value: "ยาย",
+                                                label: "ยาย",
+                                            },
+                                            {
+                                                value: "ลุง",
+                                                label: "ลุง",
+                                            },
+                                            {
+                                                value: "ป้า",
+                                                label: "ป้า",
+                                            },
+                                            {
+                                                value: "น้า",
+                                                label: "น้า",
+                                            },
+                                            {
+                                                value: "อา",
+                                                label: "อา",
+                                            },
+                                            {
+                                                value: "อื่น ๆ",
+                                                label: "อื่น ๆ",
+                                            },
+                                        ]}
+                                    />
 
-                            <Input
-                                label="สาขาวิชา"
-                                required
-                                name="major"
-                                value={
-                                    formData.major
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="ระบุสาขาวิชา"
-                            />
+                                    <SelectInput
+                                        label="คำนำหน้าชื่อ"
+                                        name="guardianPrefix"
+                                        value={
+                                            formData.guardianPrefix
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        options={[
+                                            {
+                                                value: "",
+                                                label: "เลือกคำนำหน้าชื่อ",
+                                            },
+                                            {
+                                                value: "นาย",
+                                                label: "นาย",
+                                            },
+                                            {
+                                                value: "นาง",
+                                                label: "นาง",
+                                            },
+                                            {
+                                                value: "นางสาว",
+                                                label: "นางสาว",
+                                            },
+                                        ]}
+                                    />
 
-                            <SelectInput
-                                label="ชั้นปี"
-                                required
-                                name="yearLevel"
-                                value={
-                                    formData.yearLevel
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                options={[
-                                    {
-                                        value: "",
-                                        label: "เลือกชั้นปี",
-                                    },
-                                    {
-                                        value: "1",
-                                        label: "ชั้นปีที่ 1",
-                                    },
-                                    {
-                                        value: "2",
-                                        label: "ชั้นปีที่ 2",
-                                    },
-                                    {
-                                        value: "3",
-                                        label: "ชั้นปีที่ 3",
-                                    },
-                                    {
-                                        value: "4",
-                                        label: "ชั้นปีที่ 4",
-                                    },
-                                    {
-                                        value: "5",
-                                        label: "ชั้นปีที่ 5",
-                                    },
-                                    {
-                                        value: "6",
-                                        label: "ชั้นปีที่ 6",
-                                    },
-                                ]}
-                            />
+                                    <Input
+                                        label="ชื่อ"
+                                        name="guardianFirstName"
+                                        value={
+                                            formData.guardianFirstName
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="กรอกชื่อผู้ปกครอง"
+                                    />
 
-                            <Input
-                                label="ปีการศึกษา"
-                                name="academicYear"
-                                value={
-                                    formData.academicYear
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="เช่น 2569"
-                                inputMode="numeric"
-                            />
+                                    <Input
+                                        label="นามสกุล"
+                                        name="guardianLastName"
+                                        value={
+                                            formData.guardianLastName
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="กรอกนามสกุลผู้ปกครอง"
+                                    />
 
-                            <SelectInput
-                                label="ภาคการศึกษา"
-                                required
-                                name="semester"
-                                value={
-                                    formData.semester
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                options={[
-                                    {
-                                        value: "1",
-                                        label: "ภาคการศึกษาที่ 1",
-                                    },
-                                    {
-                                        value: "2",
-                                        label: "ภาคการศึกษาที่ 2",
-                                    },
-                                ]}
-                            />
-                        </div>
-                    </FormSection>
+                                    <Input
+                                        label="เลขประจำตัวประชาชน"
+                                        name="guardianCitizenId"
+                                        value={
+                                            formData.guardianCitizenId
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="เลขประจำตัวประชาชน 13 หลัก"
+                                        maxLength={13}
+                                        inputMode="numeric"
+                                    />
 
-                    <FormSection
-                        icon="👨"
-                        title="ข้อมูลบิดา"
-                        subtitle="ข้อมูลส่วนบุคคล อาชีพ และรายได้ของบิดา"
-                    >
-                        <ParentFields
-                            type="father"
-                            formData={formData}
-                            onChange={
-                                handleChange
-                            }
-                            defaultPrefix="นาย"
-                        />
-                    </FormSection>
+                                    <Input
+                                        label="อาชีพ"
+                                        name="guardianOccupation"
+                                        value={
+                                            formData.guardianOccupation
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="ระบุอาชีพ"
+                                    />
 
-                    <FormSection
-                        icon="👩"
-                        title="ข้อมูลมารดา"
-                        subtitle="ข้อมูลส่วนบุคคล อาชีพ และรายได้ของมารดา"
-                    >
-                        <ParentFields
-                            type="mother"
-                            formData={formData}
-                            onChange={
-                                handleChange
-                            }
-                            defaultPrefix="นาง"
-                        />
-                    </FormSection>
+                                    <Input
+                                        label="รายได้ต่อเดือน"
+                                        name="guardianMonthlyIncome"
+                                        type="number"
+                                        min="0"
+                                        value={
+                                            formData.guardianMonthlyIncome
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="จำนวนเงิน"
+                                    />
 
-                    <FormSection
-                        icon="🧑"
-                        title="ข้อมูลผู้ปกครอง"
-                        subtitle="กรอกกรณีผู้ปกครองไม่ใช่บิดาหรือมารดา หรือเป็นผู้ดูแลหลัก"
-                    >
-                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                            <SelectInput
-                                label="ความสัมพันธ์กับนักศึกษา"
-                                name="guardianRelation"
-                                value={
-                                    formData.guardianRelation
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                options={[
-                                    {
-                                        value: "",
-                                        label: "เลือกความสัมพันธ์",
-                                    },
-                                    {
-                                        value: "บิดา",
-                                        label: "บิดา",
-                                    },
-                                    {
-                                        value: "มารดา",
-                                        label: "มารดา",
-                                    },
-                                    {
-                                        value: "ปู่",
-                                        label: "ปู่",
-                                    },
-                                    {
-                                        value: "ย่า",
-                                        label: "ย่า",
-                                    },
-                                    {
-                                        value: "ตา",
-                                        label: "ตา",
-                                    },
-                                    {
-                                        value: "ยาย",
-                                        label: "ยาย",
-                                    },
-                                    {
-                                        value: "ลุง",
-                                        label: "ลุง",
-                                    },
-                                    {
-                                        value: "ป้า",
-                                        label: "ป้า",
-                                    },
-                                    {
-                                        value: "น้า",
-                                        label: "น้า",
-                                    },
-                                    {
-                                        value: "อา",
-                                        label: "อา",
-                                    },
-                                    {
-                                        value: "อื่น ๆ",
-                                        label: "อื่น ๆ",
-                                    },
-                                ]}
-                            />
+                                    <Input
+                                        label="หมายเลขโทรศัพท์"
+                                        name="guardianPhone"
+                                        value={
+                                            formData.guardianPhone
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="08XXXXXXXX"
+                                        inputMode="tel"
+                                    />
+                                </div>
+                            </FormSection>
+                        )}
 
-                            <SelectInput
-                                label="คำนำหน้าชื่อ"
-                                name="guardianPrefix"
-                                value={
-                                    formData.guardianPrefix
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                options={[
-                                    {
-                                        value: "",
-                                        label: "เลือกคำนำหน้าชื่อ",
-                                    },
-                                    {
-                                        value: "นาย",
-                                        label: "นาย",
-                                    },
-                                    {
-                                        value: "นาง",
-                                        label: "นาง",
-                                    },
-                                    {
-                                        value: "นางสาว",
-                                        label: "นางสาว",
-                                    },
-                                ]}
-                            />
+                        {activeSection === 5 && (
+                            <FormSection
+                                icon="🏠"
+                                title="ข้อมูลครอบครัว"
+                                subtitle="ข้อมูลรายได้และจำนวนสมาชิกภายในครอบครัว"
+                            >
+                                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                    <Input
+                                        label="รายได้รวมของครอบครัวต่อเดือน"
+                                        name="totalFamilyIncome"
+                                        type="number"
+                                        min="0"
+                                        value={
+                                            formData.totalFamilyIncome
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="จำนวนเงิน"
+                                        suffix="บาท"
+                                    />
 
-                            <Input
-                                label="ชื่อ"
-                                name="guardianFirstName"
-                                value={
-                                    formData.guardianFirstName
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="กรอกชื่อผู้ปกครอง"
-                            />
+                                    <Input
+                                        label="จำนวนสมาชิกในครอบครัว"
+                                        name="numberOfFamilyMembers"
+                                        type="number"
+                                        min="1"
+                                        value={
+                                            formData.numberOfFamilyMembers
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="จำนวนสมาชิก"
+                                        suffix="คน"
+                                    />
 
-                            <Input
-                                label="นามสกุล"
-                                name="guardianLastName"
-                                value={
-                                    formData.guardianLastName
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="กรอกนามสกุลผู้ปกครอง"
-                            />
+                                    <Input
+                                        label="จำนวนสมาชิกที่กำลังศึกษา"
+                                        name="numberOfStudyingMembers"
+                                        type="number"
+                                        min="0"
+                                        value={
+                                            formData.numberOfStudyingMembers
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        placeholder="จำนวนสมาชิก"
+                                        suffix="คน"
+                                    />
+                                </div>
+                            </FormSection>
+                        )}
 
-                            <Input
-                                label="เลขประจำตัวประชาชน"
-                                name="guardianCitizenId"
-                                value={
-                                    formData.guardianCitizenId
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="เลขประจำตัวประชาชน 13 หลัก"
-                                maxLength={13}
-                                inputMode="numeric"
-                            />
+                        {activeSection === 6 && (
+                            <FormSection
+                                icon="📋"
+                                title="ข้อมูลการกู้ยืม"
+                                subtitle="ข้อมูลที่ใช้กำหนดเงื่อนไขการคัดกรองและรายการเอกสาร"
+                            >
+                                <div className="grid gap-5 md:grid-cols-2">
+                                    <SelectInput
+                                        label="ประเภทผู้กู้"
+                                        required
+                                        name="loanTypeCode"
+                                        value={
+                                            formData.loanTypeCode
+                                        }
+                                        onChange={
+                                            handleChange
+                                        }
+                                        options={[
+                                            {
+                                                value: "NEW_BORROWER",
+                                                label: "ผู้กู้รายใหม่",
+                                            },
+                                            {
+                                                value:
+                                                    "CONTINUING_SPECIAL",
+                                                label: "ผู้กู้ต่อเนื่องกรณีพิเศษ",
+                                            },
+                                            {
+                                                value:
+                                                    "CONTINUING_YEAR",
+                                                label: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
+                                            },
+                                        ]}
+                                    />
 
-                            <Input
-                                label="อาชีพ"
-                                name="guardianOccupation"
-                                value={
-                                    formData.guardianOccupation
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="ระบุอาชีพ"
-                            />
+                                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+                                        <p className="text-sm font-black text-blue-700">
+                                            ประเภทที่เลือก
+                                        </p>
 
-                            <Input
-                                label="รายได้ต่อเดือน"
-                                name="guardianMonthlyIncome"
-                                type="number"
-                                min="0"
-                                value={
-                                    formData.guardianMonthlyIncome
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="จำนวนเงิน"
-                            />
+                                        <p className="mt-2 font-black text-[#07116f]">
+                                            {loanTypeLabels[
+                                                formData.loanTypeCode
+                                            ] ||
+                                                "ยังไม่ได้เลือกประเภทผู้กู้"}
+                                        </p>
 
-                            <Input
-                                label="หมายเลขโทรศัพท์"
-                                name="guardianPhone"
-                                value={
-                                    formData.guardianPhone
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="08XXXXXXXX"
-                                inputMode="tel"
-                            />
-                        </div>
-                    </FormSection>
+                                        <p className="mt-2 text-sm leading-6 text-gray-500">
+                                            ระบบจะคำนวณรายการเอกสารตามประเภทผู้กู้
+                                            ภาคการศึกษา และอายุของนักศึกษา
+                                        </p>
+                                    </div>
+                                </div>
+                            </FormSection>
+                        )}
 
-                    <FormSection
-                        icon="🏠"
-                        title="ข้อมูลครอบครัว"
-                        subtitle="ข้อมูลรายได้และจำนวนสมาชิกภายในครอบครัว"
-                    >
-                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                            <Input
-                                label="รายได้รวมของครอบครัวต่อเดือน"
-                                name="totalFamilyIncome"
-                                type="number"
-                                min="0"
-                                value={
-                                    formData.totalFamilyIncome
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="จำนวนเงิน"
-                                suffix="บาท"
-                            />
-
-                            <Input
-                                label="จำนวนสมาชิกในครอบครัว"
-                                name="numberOfFamilyMembers"
-                                type="number"
-                                min="1"
-                                value={
-                                    formData.numberOfFamilyMembers
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="จำนวนสมาชิก"
-                                suffix="คน"
-                            />
-
-                            <Input
-                                label="จำนวนสมาชิกที่กำลังศึกษา"
-                                name="numberOfStudyingMembers"
-                                type="number"
-                                min="0"
-                                value={
-                                    formData.numberOfStudyingMembers
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="จำนวนสมาชิก"
-                                suffix="คน"
-                            />
-                        </div>
-                    </FormSection>
-
-                    <FormSection
-                        icon="📋"
-                        title="ข้อมูลการกู้ยืม"
-                        subtitle="ข้อมูลที่ใช้กำหนดเงื่อนไขการคัดกรองและรายการเอกสาร"
-                    >
-                        <div className="grid gap-5 md:grid-cols-2">
-                            <SelectInput
-                                label="ประเภทผู้กู้"
-                                required
-                                name="loanTypeCode"
-                                value={
-                                    formData.loanTypeCode
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                options={[
-                                    {
-                                        value: "NEW_BORROWER",
-                                        label: "ผู้กู้รายใหม่",
-                                    },
-                                    {
-                                        value:
-                                            "CONTINUING_SPECIAL",
-                                        label: "ผู้กู้ต่อเนื่องกรณีพิเศษ",
-                                    },
-                                    {
-                                        value:
-                                            "CONTINUING_YEAR",
-                                        label: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
-                                    },
-                                ]}
-                            />
-
-                            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                                <p className="text-sm font-black text-blue-700">
-                                    ประเภทที่เลือก
-                                </p>
-
-                                <p className="mt-2 font-black text-[#07116f]">
-                                    {loanTypeLabels[
-                                        formData.loanTypeCode
-                                    ] ||
-                                        "ยังไม่ได้เลือกประเภทผู้กู้"}
-                                </p>
-
-                                <p className="mt-2 text-sm leading-6 text-gray-500">
-                                    ระบบจะคำนวณรายการเอกสารตามประเภทผู้กู้
-                                    ภาคการศึกษา และอายุของนักศึกษา
-                                </p>
-                            </div>
-                        </div>
-                    </FormSection>
-
-                    {message && (
-                        <div
-                            className={`rounded-2xl border p-5 font-black ${messageType ===
+                        {message && (
+                            <div
+                                className={`rounded-2xl border p-5 font-black ${messageType ===
                                     "success"
                                     ? "border-green-200 bg-green-50 text-green-700"
                                     : "border-red-200 bg-red-50 text-red-700"
-                                }`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <span className="text-2xl">
-                                    {messageType ===
-                                        "success"
-                                        ? "✅"
-                                        : "⚠️"}
-                                </span>
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-2xl">
+                                        {messageType ===
+                                            "success"
+                                            ? "✅"
+                                            : "⚠️"}
+                                    </span>
 
-                                <p>{message}</p>
+                                    <p>{message}</p>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    <div className="sticky bottom-4 z-20 rounded-[24px] border border-gray-100 bg-white/95 p-4 shadow-xl backdrop-blur">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setPage(
-                                        "studentProfiles"
-                                    )
-                                }
-                                className="h-14 rounded-2xl border border-gray-200 bg-white px-8 font-black text-gray-700 transition hover:bg-gray-50"
-                            >
-                                ยกเลิก
-                            </button>
+                        <div className="sticky bottom-4 z-20 rounded-[24px] border border-gray-100 bg-white/95 p-4 shadow-xl backdrop-blur">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setPage(
+                                                "studentProfiles"
+                                            )
+                                        }
+                                        className="h-14 rounded-2xl border border-gray-200 bg-white px-6 font-black text-gray-700 transition hover:bg-gray-50"
+                                    >
+                                        ยกเลิก
+                                    </button>
 
-                            <button
-                                type="submit"
-                                className="h-14 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-10 font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
-                            >
-                                💾 บันทึกข้อมูลนักศึกษา
-                            </button>
+                                    <button
+                                        type="button"
+                                        disabled={activeSection === 0}
+                                        onClick={() =>
+                                            setActiveSection((current) =>
+                                                Math.max(current - 1, 0)
+                                            )
+                                        }
+                                        className="h-14 rounded-2xl border border-gray-200 bg-white px-6 font-black text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        ← ก่อนหน้า
+                                    </button>
+                                </div>
+
+                                {activeSection < sections.length - 1 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setActiveSection((current) =>
+                                                Math.min(
+                                                    current + 1,
+                                                    sections.length - 1
+                                                )
+                                            )
+                                        }
+                                        className="h-14 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-10 font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+                                    >
+                                        ถัดไป →
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="submit"
+                                        className="h-14 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-10 font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+                                    >
+                                        💾 บันทึกข้อมูลนักศึกษา
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -1103,8 +1201,8 @@ function Input({
                     placeholder={placeholder}
                     required={required}
                     className={`h-13 w-full rounded-xl border border-gray-200 bg-[#f8fbff] px-4 font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 ${suffix
-                            ? "pr-16"
-                            : ""
+                        ? "pr-16"
+                        : ""
                         }`}
                     {...inputProps}
                 />

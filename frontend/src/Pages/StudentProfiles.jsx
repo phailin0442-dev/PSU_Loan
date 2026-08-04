@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useApp } from "../context/AppContext";
 
 function formatThaiDate(dateValue) {
@@ -83,6 +84,19 @@ function getFullName(
 
 function StudentProfiles({ setPage }) {
   const { selectedStudent } = useApp();
+
+  // แท็บที่เปิดอยู่ตอนนี้ (0-6) — ให้ดูทีละหัวข้อแทนเลื่อนยาว
+  const [activeSection, setActiveSection] = useState(0);
+
+  const sections = [
+    { icon: "👤", label: "ข้อมูลส่วนบุคคล" },
+    { icon: "🏫", label: "ข้อมูลการศึกษา" },
+    { icon: "👨", label: "ข้อมูลบิดา" },
+    { icon: "👩", label: "ข้อมูลมารดา" },
+    { icon: "🧑", label: "ข้อมูลผู้ปกครอง" },
+    { icon: "🏠", label: "ข้อมูลครอบครัว" },
+    { icon: "📋", label: "ข้อมูลการกู้ยืม" },
+  ];
 
   const status =
     selectedStudent.applicationStatus ||
@@ -408,99 +422,164 @@ function StudentProfiles({ setPage }) {
           </section>
         )}
 
-        <ProfileSection
-          icon="👤"
-          title="ข้อมูลส่วนบุคคล"
-          subtitle="ข้อมูลทั่วไปและข้อมูลการติดต่อของนักศึกษา"
-          rows={personalRows}
-          columns="xl:grid-cols-3"
-        />
+        <div className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-start">
+          {/* Sidebar เลือกหัวข้อ */}
+          <nav className="flex gap-2 overflow-x-auto rounded-2xl bg-white p-3 shadow-sm lg:sticky lg:top-6 lg:w-64 lg:shrink-0 lg:flex-col lg:overflow-visible">
+            {sections.map((section, index) => (
+              <button
+                key={section.label}
+                type="button"
+                onClick={() => setActiveSection(index)}
+                className={`flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black transition lg:shrink ${activeSection === index
+                  ? "bg-[#07116f] text-white shadow-md"
+                  : "text-gray-600 hover:bg-blue-50"
+                  }`}
+              >
+                <span className="text-lg">{section.icon}</span>
+                <span className="whitespace-nowrap lg:whitespace-normal">
+                  {section.label}
+                </span>
+              </button>
+            ))}
+          </nav>
 
-        <ProfileSection
-          icon="🏫"
-          title="ข้อมูลการศึกษา"
-          subtitle="ข้อมูลสถานภาพนักศึกษาและภาคการศึกษาปัจจุบัน"
-          rows={educationRows}
-          columns="xl:grid-cols-3"
-        />
+          {/* เนื้อหาของแท็บที่เลือก */}
+          <div className="min-w-0 flex-1">
+            {activeSection === 0 && (
+              <ProfileSection
+                icon="👤"
+                title="ข้อมูลส่วนบุคคล"
+                subtitle="ข้อมูลทั่วไปและข้อมูลการติดต่อของนักศึกษา"
+                rows={personalRows}
+                columns="xl:grid-cols-3"
+                noMargin
+              />
+            )}
 
-        <ProfileSection
-          icon="👨"
-          title="ข้อมูลบิดา"
-          subtitle="ข้อมูลส่วนบุคคล อาชีพ และรายได้ของบิดา"
-          rows={fatherRows}
-          columns="xl:grid-cols-3"
-        />
+            {activeSection === 1 && (
+              <ProfileSection
+                icon="🏫"
+                title="ข้อมูลการศึกษา"
+                subtitle="ข้อมูลสถานภาพนักศึกษาและภาคการศึกษาปัจจุบัน"
+                rows={educationRows}
+                columns="xl:grid-cols-3"
+                noMargin
+              />
+            )}
 
-        <ProfileSection
-          icon="👩"
-          title="ข้อมูลมารดา"
-          subtitle="ข้อมูลส่วนบุคคล อาชีพ และรายได้ของมารดา"
-          rows={motherRows}
-          columns="xl:grid-cols-3"
-        />
+            {activeSection === 2 && (
+              <ProfileSection
+                icon="👨"
+                title="ข้อมูลบิดา"
+                subtitle="ข้อมูลส่วนบุคคล อาชีพ และรายได้ของบิดา"
+                rows={fatherRows}
+                columns="xl:grid-cols-3"
+                noMargin
+              />
+            )}
 
-        <ProfileSection
-          icon="🧑"
-          title="ข้อมูลผู้ปกครอง"
-          subtitle="กรณีผู้ปกครองไม่ใช่บิดาหรือมารดา"
-          rows={guardianRows}
-          columns="xl:grid-cols-3"
-          emptyText="ยังไม่ได้ระบุข้อมูลผู้ปกครองเพิ่มเติม"
-        />
+            {activeSection === 3 && (
+              <ProfileSection
+                icon="👩"
+                title="ข้อมูลมารดา"
+                subtitle="ข้อมูลส่วนบุคคล อาชีพ และรายได้ของมารดา"
+                rows={motherRows}
+                columns="xl:grid-cols-3"
+                noMargin
+              />
+            )}
 
-        <ProfileSection
-          icon="🏠"
-          title="ข้อมูลครอบครัว"
-          subtitle="รายได้และจำนวนสมาชิกภายในครอบครัว"
-          rows={familyRows}
-          columns="xl:grid-cols-3"
-        />
+            {activeSection === 4 && (
+              <ProfileSection
+                icon="🧑"
+                title="ข้อมูลผู้ปกครอง"
+                subtitle="กรณีผู้ปกครองไม่ใช่บิดาหรือมารดา"
+                rows={guardianRows}
+                columns="xl:grid-cols-3"
+                emptyText="ยังไม่ได้ระบุข้อมูลผู้ปกครองเพิ่มเติม"
+                noMargin
+              />
+            )}
 
-        <section className="mt-7 overflow-hidden rounded-[28px] bg-white shadow-sm">
-          <SectionHeader
-            icon="📋"
-            title="ข้อมูลการกู้ยืม"
-            subtitle="ข้อมูลที่ใช้กำหนดขั้นตอนการคัดกรองและรายการเอกสาร"
-          />
+            {activeSection === 5 && (
+              <ProfileSection
+                icon="🏠"
+                title="ข้อมูลครอบครัว"
+                subtitle="รายได้และจำนวนสมาชิกภายในครอบครัว"
+                rows={familyRows}
+                columns="xl:grid-cols-3"
+                noMargin
+              />
+            )}
 
-          <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4 lg:p-8">
-            <InfoCard
-              label="ประเภทผู้กู้"
-              value={
-                selectedStudent.loanTypeName
-              }
-            />
+            {activeSection === 6 && (
+              <section className="overflow-hidden rounded-[28px] bg-white shadow-sm">
+                <SectionHeader
+                  icon="📋"
+                  title="ข้อมูลการกู้ยืม"
+                  subtitle="ข้อมูลที่ใช้กำหนดขั้นตอนการคัดกรองและรายการเอกสาร"
+                />
 
-            <InfoCard
-              label="GPAX"
-              value={
-                selectedStudent.gpax ??
-                "-"
-              }
-            />
+                <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4 lg:p-8">
+                  <InfoCard
+                    label="ประเภทผู้กู้"
+                    value={selectedStudent.loanTypeName}
+                  />
 
-            <InfoCard
-              label="ชั่วโมงจิตอาสา"
-              value={
-                selectedStudent.volunteerHours !==
-                  null &&
-                  selectedStudent.volunteerHours !==
-                  undefined
-                  ? `${selectedStudent.volunteerHours} ชั่วโมง`
-                  : "-"
-              }
-            />
+                  <InfoCard
+                    label="GPAX"
+                    value={selectedStudent.gpax ?? "-"}
+                  />
 
-            <InfoCard
-              label="ผลการคัดกรอง"
-              value={
-                selectedStudent.eligibilityStatus ||
-                "ยังไม่ได้ตรวจสอบ"
-              }
-            />
+                  <InfoCard
+                    label="ชั่วโมงจิตอาสา"
+                    value={
+                      selectedStudent.volunteerHours !== null &&
+                        selectedStudent.volunteerHours !== undefined
+                        ? `${selectedStudent.volunteerHours} ชั่วโมง`
+                        : "-"
+                    }
+                  />
+
+                  <InfoCard
+                    label="ผลการคัดกรอง"
+                    value={
+                      selectedStudent.eligibilityStatus ||
+                      "ยังไม่ได้ตรวจสอบ"
+                    }
+                  />
+                </div>
+              </section>
+            )}
+
+            {/* ปุ่มก่อนหน้า/ถัดไป ไล่ทีละหัวข้อ */}
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                disabled={activeSection === 0}
+                onClick={() =>
+                  setActiveSection((current) => Math.max(current - 1, 0))
+                }
+                className="h-11 rounded-xl border border-gray-200 bg-white px-5 text-sm font-black text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ← ก่อนหน้า
+              </button>
+
+              <button
+                type="button"
+                disabled={activeSection === sections.length - 1}
+                onClick={() =>
+                  setActiveSection((current) =>
+                    Math.min(current + 1, sections.length - 1)
+                  )
+                }
+                className="h-11 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-5 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ถัดไป →
+              </button>
+            </div>
           </div>
-        </section>
+        </div>
 
         <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-between">
           <button
@@ -514,18 +593,6 @@ function StudentProfiles({ setPage }) {
           </button>
 
           <div className="flex flex-col gap-4 sm:flex-row">
-            <button
-              type="button"
-              onClick={() =>
-                setPage(
-                  "studentInfo"
-                )
-              }
-              className="h-14 rounded-2xl border-2 border-[#07116f] bg-white px-8 font-black text-[#07116f] transition hover:bg-blue-50"
-            >
-              ✏️ แก้ไขข้อมูล
-            </button>
-
             <button
               type="button"
               onClick={() =>
@@ -551,6 +618,7 @@ function ProfileSection({
   rows,
   columns,
   emptyText,
+  noMargin,
 }) {
   const hasInformation = rows.some(
     ([, value]) =>
@@ -560,7 +628,10 @@ function ProfileSection({
   );
 
   return (
-    <section className="mt-7 overflow-hidden rounded-[28px] bg-white shadow-sm">
+    <section
+      className={`overflow-hidden rounded-[28px] bg-white shadow-sm ${noMargin ? "" : "mt-7"
+        }`}
+    >
       <SectionHeader
         icon={icon}
         title={title}
@@ -619,8 +690,8 @@ function SummaryCard({
 
           <p
             className={`mt-2 font-black ${status
-                ? "text-blue-600"
-                : "text-[#07116f]"
+              ? "text-blue-600"
+              : "text-[#07116f]"
               }`}
           >
             {value || "-"}

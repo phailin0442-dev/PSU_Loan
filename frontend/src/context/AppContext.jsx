@@ -10,6 +10,7 @@ import {
 import { fetchStudentDetail, fetchStudentList } from "../services/api";
 import {
     mapApplicationStatusToLabel,
+    mapBackendStatusToLabel,
     normalizeBorrowerTypeCode,
 } from "../rules/documentRules";
 
@@ -140,6 +141,45 @@ function mergeDetailIntoStudent(student, detail) {
         .filter((item) => item.documentId)
         .map((item) => mapRequiredDocToFrontendDoc(item));
 
+    // จำนวนครั้งที่ถูกตีกลับสะสม "รวมทุกเอกสาร ทุกรอบ" (ไม่ใช่แค่นับว่า
+    // ตอนนี้ค้างอยู่กี่ใบ) ให้ตรงกับความหมายเดียวกับที่หน้าเจ้าหน้าที่ใช้
+    // (rejectionCount ต่อเอกสาร) — Home.jsx จะอ่านจาก field นี้โดยตรง
+    const revisionCount = requiredDocuments.reduce(
+        (sum, item) => sum + (Number(item.rejectionCount) || 0),
+        0
+    );
+
+    // ประวัติการเปลี่ยนสถานะคำร้อง — แปลรหัสสถานะเป็นข้อความไทยไว้ล่วงหน้า
+    // ให้หน้า Status.jsx ใช้แสดงตารางได้เลยไม่ต้องแปลเอง
+    const statusHistory = (detail.statusHistory || []).map((item) => ({
+        oldStatus: item.oldStatus,
+        newStatus: item.newStatus,
+        oldStatusLabel: item.oldStatus
+            ? mapApplicationStatusToLabel(item.oldStatus)
+            : "-",
+        newStatusLabel: mapApplicationStatusToLabel(item.newStatus),
+        remark: item.remark || "",
+        changedAt: item.changedAt,
+    }));
+
+    // ประวัติการตรวจ/ตีกลับรายไฟล์แบบละเอียด (ไฟล์ไหน รอบที่เท่าไหร่
+    // ใครตรวจ เหตุผลอะไร) — ใช้แทนที่ statusHistory แบบทั่วไปในตาราง
+    // "ประวัติการยื่นคำขอ" ที่หน้า Status.jsx
+    const documentReviewHistory = (detail.documentReviewHistory || []).map(
+        (item) => ({
+            round: item.round,
+            documentName: item.documentName,
+            versionNo: item.versionNo,
+            oldStatusLabel: item.oldStatus
+                ? mapBackendStatusToLabel(item.oldStatus)
+                : "-",
+            newStatusLabel: mapBackendStatusToLabel(item.newStatus),
+            reason: item.reason || "-",
+            reviewedByName: item.reviewedByName?.trim() || "-",
+            reviewedAt: item.reviewedAt,
+        })
+    );
+
     return {
         ...student,
         parent: detail.parent || null,
@@ -147,6 +187,9 @@ function mergeDetailIntoStudent(student, detail) {
         qualificationDocuments,
         documents,
         documentsCompleted,
+        revisionCount,
+        statusHistory,
+        documentReviewHistory,
         _detailLoaded: true,
     };
 }

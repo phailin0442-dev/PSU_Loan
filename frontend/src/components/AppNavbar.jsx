@@ -21,14 +21,9 @@ function AppNavbar({ setPage }) {
             label: "ข้อมูลของฉัน",
         },
         {
-            id: "student-eligibility",
+            id: "student-loan-application",
             page: "eligibility",
-            label: "คัดกรองคุณสมบัติ",
-        },
-        {
-            id: "student-documents",
-            page: "uploadDocuments",
-            label: "เอกสาร",
+            label: "คำขอกู้ยืมเงิน กยศ.",
         },
         {
             id: "student-booking",

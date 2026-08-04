@@ -14,6 +14,7 @@ function UploadDocuments({ setPage }) {
 
   const [files, setFiles] = useState({});
   const [uploadingCategory, setUploadingCategory] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
@@ -60,10 +61,12 @@ function UploadDocuments({ setPage }) {
     (item) => files[item.requirementId]
   ).length;
 
-  const progress =
+  const progress = `${selectedCount}/${required.length}`;
+  const progressPercent =
     required.length > 0
       ? Math.round((selectedCount / required.length) * 100)
       : 100;
+  const allSelected = required.length > 0 && selectedCount === required.length;
 
   const handleFileChange = (requirementId, file) => {
     setFiles((current) => ({
@@ -86,22 +89,17 @@ function UploadDocuments({ setPage }) {
     setMessageType("");
   };
 
-  const handleUploadOne = async (requirementId) => {
+  // ฟังก์ชันภายในสำหรับอัปโหลดทีละไฟล์ — เรียกจาก handleSubmitAll เท่านั้น
+  // (ไม่มีปุ่มอัปโหลดแยกรายไฟล์แล้ว ต้องเลือกไฟล์ให้ครบทุกช่องก่อน
+  // ถึงจะกดปุ่ม "ส่งทั้งหมด" ได้ ตามที่ต้องการให้เอกสารส่งถึงมือ
+  // เจ้าหน้าที่ครบชุดเสมอ ส่วนความถูกต้องของแต่ละไฟล์ค่อยให้เจ้าหน้าที่
+  // ตรวจทีหลังตามปกติ)
+  const uploadOneFile = async (requirementId) => {
     const file = files[requirementId];
 
-    if (!file) return;
-
-    if (!selectedStudent?.studentUserId) {
-      setMessage(
-        "ไม่พบรหัสผู้ใช้ของนักศึกษา (studentUserId) กรุณาโหลดหน้าใหม่อีกครั้ง"
-      );
-      setMessageType("error");
-      return;
-    }
+    if (!file) return { requirementId, ok: false };
 
     setUploadingCategory(requirementId);
-    setMessage("");
-    setMessageType("");
 
     try {
       await uploadStudentDocument(selectedStudent.id, {
@@ -110,282 +108,224 @@ function UploadDocuments({ setPage }) {
         uploadedBy: selectedStudent.studentUserId,
       });
 
+      return { requirementId, ok: true };
+    } catch (error) {
+      return {
+        requirementId,
+        ok: false,
+        error: error.message || "อัปโหลดเอกสารไม่สำเร็จ",
+      };
+    }
+  };
+
+  const handleSubmitAll = async () => {
+    if (!selectedStudent?.studentUserId) {
+      setMessage(
+        "ไม่พบรหัสผู้ใช้ของนักศึกษา (studentUserId) กรุณาโหลดหน้าใหม่อีกครั้ง"
+      );
+      setMessageType("error");
+      return;
+    }
+
+    // บังคับว่าต้องเลือกไฟล์ครบทุกช่องก่อน ถึงจะกดส่งได้ (ตามที่ต้องการให้
+    // เอกสารชุดที่ส่งถึงเจ้าหน้าที่ครบสมบูรณ์เสมอ ไม่ใช่ส่งแค่บางไฟล์)
+    if (!allSelected) {
+      setMessage(
+        `กรุณาเลือกไฟล์ให้ครบทุกรายการก่อนส่ง (ตอนนี้เลือกแล้ว ${selectedCount}/${required.length})`
+      );
+      setMessageType("error");
+      return;
+    }
+
+    setMessage("");
+    setMessageType("");
+    setSubmitting(true);
+
+    const results = await Promise.all(
+      required.map((item) => uploadOneFile(item.requirementId))
+    );
+
+    setUploadingCategory(null);
+    setSubmitting(false);
+
+    const failed = results.filter((result) => !result.ok);
+
+    if (failed.length === 0) {
+      setFiles({});
+      await refreshSelectedStudentDetail();
+
+      setMessage("ส่งเอกสารครบทุกรายการสำเร็จ");
+      setMessageType("success");
+
+      setTimeout(() => {
+        if (setPage) setPage("status");
+      }, 800);
+    } else {
+      // ลบเฉพาะไฟล์ที่อัปโหลดสำเร็จออกจาก state เหลือแค่ที่พังไว้ให้แก้/ลองใหม่
       setFiles((current) => {
         const updated = { ...current };
-        delete updated[requirementId];
+        results
+          .filter((result) => result.ok)
+          .forEach((result) => delete updated[result.requirementId]);
         return updated;
       });
 
       await refreshSelectedStudentDetail();
 
-      setMessage("อัปโหลดเอกสารสำเร็จ");
-      setMessageType("success");
-    } catch (error) {
-      setMessage(error.message || "อัปโหลดเอกสารไม่สำเร็จ");
+      setMessage(
+        `ส่งไม่สำเร็จ ${failed.length} ไฟล์ (${failed
+          .map((f) => f.error)
+          .join(", ")}) — กรุณาเลือกไฟล์ใหม่สำหรับรายการที่ยังค้างแล้วลองอีกครั้ง`
+      );
       setMessageType("error");
-    } finally {
-      setUploadingCategory(null);
-    }
-  };
-
-  const handleSubmitAll = async () => {
-    const toUpload = required.filter((item) => files[item.requirementId]);
-
-    if (toUpload.length === 0) {
-      setMessage("กรุณาเลือกไฟล์อย่างน้อย 1 รายการก่อน");
-      setMessageType("error");
-      return;
-    }
-
-    for (const item of toUpload) {
-      await handleUploadOne(item.requirementId);
-    }
-
-    if (pendingRequirements.length === toUpload.length) {
-      setTimeout(() => {
-        if (setPage) setPage("status");
-      }, 800);
     }
   };
 
   return (
-    <main className="w-full px-6 py-8 lg:px-12">
-      <section className="mx-auto max-w-6xl">
-        <div className="overflow-hidden rounded-[32px] bg-gradient-to-r from-[#07116f] to-[#0646ff] shadow-lg">
-          <div className="flex flex-col gap-6 p-8 text-white md:flex-row md:items-center md:justify-between lg:p-10">
-            <div className="flex items-center gap-5">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/15 text-4xl ring-1 ring-white/20">
-                📂
-              </div>
-
-              <div>
-                <p className="text-sm font-black text-blue-100">
-                  ขั้นตอนการส่งเอกสาร
-                </p>
-
-                <h1 className="mt-2 text-3xl font-black md:text-4xl">
-                  เอกสารของฉัน
-                </h1>
-
-                <p className="mt-2 text-sm leading-6 text-blue-100">
-                  {selectedStudent?.fullName || "ไม่พบชื่อนักศึกษา"}
-                  {" · "}
-                  {selectedStudent?.loanTypeName ||
-                    "ยังไม่ได้ระบุประเภทผู้กู้"}
-                </p>
-              </div>
+    <main className="h-full w-full overflow-y-auto px-4 py-4 lg:px-6">
+      <section className="mx-auto flex max-w-5xl flex-col gap-3">
+        {/* Header แบบบางเรียว */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-5 py-3 text-white shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg">
+              📂
             </div>
-
-            <div className="rounded-2xl bg-white/15 px-5 py-4 ring-1 ring-white/20">
-              <p className="text-xs font-bold text-blue-100">
-                เอกสารที่ยังต้องส่ง
-              </p>
-
-              <p className="mt-1 text-xl font-black">
-                {required.length} รายการ
+            <div>
+              <h1 className="text-base font-black leading-tight">
+                เอกสารของฉัน
+              </h1>
+              <p className="text-xs leading-tight text-blue-100">
+                {selectedStudent?.fullName || "ไม่พบชื่อนักศึกษา"}
               </p>
             </div>
           </div>
+
+          <div className="flex items-center gap-4 text-xs font-bold">
+            <span className="rounded-full bg-white/15 px-3 py-1.5">
+              ต้องส่ง {required.length}
+            </span>
+            <span className="rounded-full bg-white/15 px-3 py-1.5">
+              ส่งแล้ว {uploadedDocuments.length}
+            </span>
+            <span className="rounded-full bg-white/25 px-3 py-1.5">
+              เลือกแล้ว {progress}
+            </span>
+          </div>
         </div>
 
-        <section className="mt-7 grid gap-5 md:grid-cols-3">
-          <SummaryCard
-            icon="📋"
-            label="ยังต้องอัปโหลด"
-            value={`${required.length} รายการ`}
-          />
+        {/* แถบความคืบหน้า */}
+        {required.length > 0 && (
+          <div className="rounded-xl bg-white px-4 py-2.5 shadow-sm">
+            <div className="mb-1.5 flex items-center justify-between text-xs">
+              <span className="font-bold text-gray-500">
+                เลือกไฟล์ให้ครบก่อนถึงจะส่งได้
+              </span>
+              <span className="font-black text-blue-600">{progress}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-blue-100">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#07116f] to-[#0646ff] transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
 
-          <SummaryCard
-            icon="📄"
-            label="อัปโหลดแล้ว (จาก backend)"
-            value={`${uploadedDocuments.length} รายการ`}
-          />
+        {/* รายการเอกสารที่ต้องอัปโหลด — แบบลิสต์เลขลำดับ เส้นประนำสายตา */}
+        {required.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-6 text-center">
+            <p className="text-2xl">🎉</p>
+            <p className="mt-1 text-sm font-black text-gray-600">
+              ส่งเอกสารครบทุกรายการแล้ว
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col rounded-xl bg-white px-4 py-1 shadow-sm">
+            {required.map((item, index) => (
+              <ListUploadRow
+                key={item.requirementId}
+                number={index + 1}
+                title={DOCUMENT_TYPES[item.category] || item.name}
+                file={files[item.requirementId]}
+                uploading={
+                  submitting && uploadingCategory === item.requirementId
+                }
+                isReupload={item.isReupload}
+                rejectReason={item.rejectReason}
+                onChange={(file) =>
+                  handleFileChange(item.requirementId, file)
+                }
+                onRemove={() => handleRemoveFile(item.requirementId)}
+              />
+            ))}
+          </div>
+        )}
 
-          <SummaryCard
-            icon="✅"
-            label="เลือกไฟล์ไว้แล้ว (ยังไม่ส่ง)"
-            value={`${selectedCount} รายการ`}
-          />
-        </section>
-
+        {/* เอกสารที่ส่งแล้ว — แถวกระชับ */}
         {uploadedDocuments.length > 0 && (
-          <section className="mt-7 overflow-hidden rounded-[28px] bg-white shadow-sm">
-            <div className="bg-[#eef5ff] px-6 py-4 lg:px-8">
-              <h2 className="font-black text-[#07116f]">
+          <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+            <div className="bg-[#eef5ff] px-4 py-2">
+              <h2 className="text-sm font-black text-[#07116f]">
                 เอกสารที่ส่งแล้ว
               </h2>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="max-h-40 divide-y divide-gray-100 overflow-y-auto">
               {uploadedDocuments.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between gap-4 px-6 py-4 lg:px-8"
+                  className="flex items-center justify-between gap-3 px-4 py-2"
                 >
                   <div className="min-w-0">
-                    <p className="font-black text-[#07116f]">{doc.name}</p>
-                    <p className="mt-1 truncate text-sm text-gray-400">
+                    <p className="truncate text-sm font-bold text-[#07116f]">
+                      {doc.name}
+                    </p>
+                    <p className="truncate text-xs text-gray-400">
                       {doc.fileName}
                     </p>
-                    {doc.remark && (
-                      <p className="mt-1 text-sm text-red-600">
-                        หมายเหตุ: {doc.remark}
-                      </p>
-                    )}
                   </div>
                   <StatusPill status={doc.status} />
                 </div>
               ))}
             </div>
-          </section>
+          </div>
         )}
-
-        <section className="mt-7 overflow-hidden rounded-[28px] bg-white shadow-sm">
-          <div className="bg-[#07116f] px-6 py-5 text-white lg:px-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-2xl">
-                  📄
-                </div>
-
-                <div>
-                  <h2 className="text-xl font-black md:text-2xl">
-                    รายการเอกสารที่ต้องอัปโหลด
-                  </h2>
-
-                  <p className="mt-1 text-sm text-blue-100">
-                    รองรับไฟล์ PDF, JPG, JPEG และ PNG
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-full bg-white/15 px-4 py-2 text-sm font-black">
-                {selectedCount}/{required.length}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 lg:p-8">
-            <div className="rounded-2xl bg-[#f8fbff] p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-black text-[#07116f]">
-                    ความคืบหน้าการเลือกไฟล์
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    เลือกไฟล์แล้วกด "อัปโหลด" ทีละรายการ หรือกด
-                    "ส่งทั้งหมดที่เลือกไว้" ด้านล่าง
-                  </p>
-                </div>
-                <p className="text-2xl font-black text-blue-600">
-                  {progress}%
-                </p>
-              </div>
-
-              <div className="mt-4 h-3 overflow-hidden rounded-full bg-blue-100">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#07116f] to-[#0646ff] transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-
-            {required.length === 0 ? (
-              <div className="mt-6 rounded-3xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-center">
-                <div className="text-5xl">🎉</div>
-                <p className="mt-4 text-xl font-black text-gray-600">
-                  ส่งเอกสารครบทุกรายการแล้ว
-                </p>
-                <p className="mt-2 text-sm text-gray-400">
-                  รอเจ้าหน้าที่ตรวจสอบเอกสารที่ส่งไป
-                </p>
-              </div>
-            ) : (
-              <div className="mt-6 grid grid-cols-1 gap-5">
-                {required.map((item, index) => (
-                  <DocumentUploadCard
-                    key={item.requirementId}
-                    number={index + 1}
-                    title={DOCUMENT_TYPES[item.category] || item.name}
-                    file={files[item.requirementId]}
-                    uploading={uploadingCategory === item.requirementId}
-                    isReupload={item.isReupload}
-                    previousFileName={item.previousFileName}
-                    rejectReason={item.rejectReason}
-                    onChange={(file) =>
-                      handleFileChange(item.requirementId, file)
-                    }
-                    onRemove={() => handleRemoveFile(item.requirementId)}
-                    onUpload={() => handleUploadOne(item.requirementId)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
 
         {message && (
           <div
-            className={`mt-6 rounded-3xl border p-5 ${messageType === "success"
+            className={`rounded-xl border px-4 py-2.5 text-xs font-bold ${messageType === "success"
                 ? "border-green-200 bg-green-50 text-green-700"
                 : "border-red-200 bg-red-50 text-red-700"
               }`}
           >
-            <div className="flex items-center gap-4">
-              <div
-                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl ${messageType === "success" ? "bg-green-100" : "bg-red-100"
-                  }`}
-              >
-                {messageType === "success" ? "✅" : "⚠️"}
-              </div>
-
-              <div>
-                <p className="font-black">
-                  {messageType === "success"
-                    ? "ทำรายการสำเร็จ"
-                    : "ทำรายการไม่สำเร็จ"}
-                </p>
-                <p className="mt-1 text-sm font-semibold">{message}</p>
-              </div>
-            </div>
+            {message}
           </div>
         )}
 
-        <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Action bar ล่างสุด */}
+        <div className="flex items-center justify-between gap-3 pb-2">
           <button
             type="button"
             onClick={() => setPage?.("eligibility")}
-            className="h-14 rounded-2xl border border-gray-200 bg-white px-8 font-black text-gray-700 shadow-sm transition hover:bg-gray-50 hover:shadow-md"
+            className="h-11 rounded-xl border border-gray-200 bg-white px-5 text-sm font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
           >
-            ← กลับหน้าคัดกรอง
+            ← กลับ
           </button>
 
           <button
             type="button"
             onClick={handleSubmitAll}
-            disabled={selectedCount === 0}
-            className="h-14 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-10 font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-72"
+            disabled={!allSelected || submitting}
+            className="h-11 flex-1 max-w-xs rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-6 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            ส่งทั้งหมดที่เลือกไว้ →
+            {submitting
+              ? "กำลังส่ง..."
+              : required.length === 0
+                ? "ไม่มีเอกสารที่ต้องส่ง"
+                : `ส่งเอกสารทั้งหมด (${progress}) →`}
           </button>
         </div>
       </section>
     </main>
-  );
-}
-
-function SummaryCard({ icon, label, value }) {
-  return (
-    <div className="rounded-[24px] bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold text-gray-500">{label}</p>
-          <p className="mt-2 text-xl font-black text-[#07116f]">{value}</p>
-        </div>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-2xl">
-          {icon}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -398,7 +338,7 @@ function StatusPill({ status }) {
 
   return (
     <span
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-black ${styles[status] || "bg-gray-100 text-gray-700"
+      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${styles[status] || "bg-gray-100 text-gray-700"
         }`}
     >
       {status}
@@ -406,68 +346,61 @@ function StatusPill({ status }) {
   );
 }
 
-function DocumentUploadCard({
+// แถวลิสต์แบบมีเลขลำดับ + เส้นประนำสายตาไปหาปุ่ม "แนบไฟล์"
+// รูปแบบ: 1  ชื่อเอกสาร ...................... [แนบไฟล์]
+function ListUploadRow({
   number,
   title,
   file,
   uploading,
   isReupload,
-  previousFileName,
   rejectReason,
   onChange,
   onRemove,
-  onUpload,
 }) {
+  const needsFix = isReupload && !file;
+
   return (
     <div
-      className={`overflow-hidden rounded-[24px] border-2 transition ${file
-          ? "border-green-300 bg-green-50"
-          : isReupload
-            ? "border-red-200 bg-red-50/40"
-            : "border-gray-100 bg-white hover:border-blue-300"
+      className={`my-1.5 flex items-center gap-2 rounded-lg py-2.5 ${needsFix
+          ? "border-2 border-red-300 bg-red-50/60 px-3"
+          : "border-b border-gray-100 px-1"
         }`}
     >
-      <div className="flex items-center gap-4 border-b border-gray-100 px-5 py-4">
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-black ${file
-              ? "bg-green-100 text-green-700"
-              : isReupload
-                ? "bg-red-100 text-red-700"
-                : "bg-blue-100 text-blue-700"
-            }`}
-        >
-          {file ? "✓" : isReupload ? "!" : number}
-        </div>
+      {/* เลขลำดับ */}
+      <span
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${file
+            ? "bg-green-100 text-green-700"
+            : isReupload
+              ? "bg-red-100 text-red-700"
+              : "bg-blue-100 text-blue-700"
+          }`}
+      >
+        {file ? "✓" : isReupload ? "!" : number}
+      </span>
 
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-black text-[#07116f]">{title}</p>
-            {isReupload && !file && (
-              <span className="shrink-0 rounded-full bg-red-100 px-2.5 py-1 text-xs font-black text-red-700">
-                ต้องแก้ไข
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-gray-400">เอกสารบังคับ</p>
-        </div>
-      </div>
+      {/* ชื่อเอกสาร */}
+      <span className="shrink-0 max-w-[45%] truncate text-sm font-bold text-[#07116f]">
+        {title}
+        {needsFix && (
+          <span
+            className="ml-1.5 rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-black text-red-800"
+            title={rejectReason}
+          >
+            ต้องแก้ไข
+          </span>
+        )}
+      </span>
 
-      {isReupload && !file && (
-        <div className="mx-5 mt-4 rounded-xl border border-red-200 bg-white p-3">
-          {previousFileName && (
-            <p className="text-xs text-gray-400">
-              ไฟล์เดิม: {previousFileName}
-            </p>
-          )}
-          <p className="mt-1 text-sm font-black text-red-600">
-            เหตุผลที่เจ้าหน้าที่ตีกลับ:{" "}
-            {rejectReason || "ไม่ระบุเหตุผล"}
-          </p>
-        </div>
-      )}
+      {/* เส้นประนำสายตา */}
+      <span
+        className={`mx-1 flex-1 border-b-2 border-dotted ${needsFix ? "border-red-300" : "border-gray-300"
+          }`}
+      />
 
-      <div className="p-5">
-        <label className="block cursor-pointer">
+      {/* ปุ่มแนบไฟล์ / สถานะไฟล์ที่เลือก */}
+      {!file ? (
+        <label className="shrink-0 cursor-pointer">
           <input
             type="file"
             accept=".pdf,.jpg,.jpeg,.png"
@@ -477,85 +410,27 @@ function DocumentUploadCard({
               onChange(event.target.files?.[0] || null)
             }
           />
-
-          <div
-            className={`flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed p-5 text-center transition ${file
-                ? "border-green-300 bg-white/70"
-                : "border-blue-200 bg-blue-50/50 hover:border-blue-500 hover:bg-blue-50"
-              }`}
-          >
-            <div
-              className={`flex h-14 w-14 items-center justify-center rounded-full text-3xl ${file ? "bg-green-100" : "bg-blue-100"
-                }`}
-            >
-              {file ? "📄" : "📎"}
-            </div>
-
-            <p
-              className={`mt-4 max-w-full break-all font-black ${file ? "text-green-700" : "text-[#07116f]"
-                }`}
-            >
-              {file ? file.name : "คลิกเพื่อเลือกไฟล์"}
-            </p>
-
-            <p className="mt-2 text-sm leading-6 text-gray-500">
-              {file
-                ? "เลือกไฟล์เรียบร้อยแล้ว กด \"อัปโหลด\" ด้านล่าง"
-                : "อัปโหลดเอกสารให้เห็นข้อมูลครบถ้วนและชัดเจน"}
-            </p>
-
-            <span className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-bold text-gray-500 shadow-sm">
-              PDF, JPG, JPEG หรือ PNG
-            </span>
-          </div>
+          <span className="inline-flex items-center gap-1 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/50 px-3 py-1.5 text-xs font-black text-blue-700 hover:border-blue-500 hover:bg-blue-50">
+            📎 แนบไฟล์
+          </span>
         </label>
-
-        {file && (
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-white p-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-gray-700">
-                {file.name}
-              </p>
-              <p className="mt-1 text-xs text-gray-400">
-                {formatFileSize(file.size)}
-              </p>
-            </div>
-
-            <div className="flex shrink-0 gap-2">
-              <button
-                type="button"
-                onClick={onUpload}
-                disabled={uploading}
-                className="rounded-xl bg-[#07116f] px-4 py-2 text-sm font-black text-white transition hover:bg-blue-900 disabled:opacity-50"
-              >
-                {uploading
-                  ? "กำลังอัปโหลด..."
-                  : isReupload
-                    ? "อัปโหลดใหม่"
-                    : "อัปโหลด"}
-              </button>
-
-              <button
-                type="button"
-                onClick={onRemove}
-                disabled={uploading}
-                className="rounded-xl bg-red-50 px-4 py-2 text-sm font-black text-red-600 transition hover:bg-red-100 disabled:opacity-50"
-              >
-                ลบไฟล์
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      ) : (
+        <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5">
+          <span className="max-w-28 truncate text-xs font-bold text-green-700">
+            {uploading ? "กำลังส่ง..." : file.name}
+          </span>
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={uploading}
+            className="shrink-0 text-xs font-black text-red-500 hover:text-red-700 disabled:opacity-50"
+          >
+            ✕
+          </button>
+        </span>
+      )}
     </div>
   );
-}
-
-function formatFileSize(size) {
-  if (!size) return "ไม่ทราบขนาดไฟล์";
-  if (size < 1024) return `${size} Bytes`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default UploadDocuments;

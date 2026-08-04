@@ -120,6 +120,11 @@ export async function reviewDocument(
     return handleResponse(response);
 }
 
+export async function fetchHomeContent() {
+    const response = await fetch(`${API_BASE_URL}/api/home`);
+    return handleResponse(response);
+}
+
 export async function fetchStaffList() {
     const response = await fetch(`${API_BASE_URL}/api/staff/list`);
     return handleResponse(response);
