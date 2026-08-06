@@ -1,891 +1,978 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-const defaultStudent = {
-    id: 1,
-    studentId: 1001,
-    studentCode: "6810110001",
-    prefix: "นางสาว",
-    firstName: "ณัฐณิชา",
-    lastName: "ศรีสุข",
-    fullName: "นางสาวณัฐณิชา ศรีสุข",
+const initialFormData = {
+  prefix: "นางสาว",
+  firstName: "",
+  lastName: "",
+  citizenId: "",
+  birthDate: "",
+  nationality: "ไทย",
+  religion: "",
+  maritalStatus: "โสด",
+  phone: "",
+  email: "",
+  address: "",
+  province: "",
+  postalCode: "",
 
-    birthDate: "2008-02-15",
-    age: 18,
+  studentCode: "",
+  faculty: "",
+  major: "",
+  yearLevel: "",
+  academicYear: "2569",
+  semester: "1",
 
-    citizenId: "1-9000-00000-00-1",
-    phone: "0812345678",
-    email: "6810110001@psu.ac.th",
+  fatherPrefix: "นาย",
+  fatherFirstName: "",
+  fatherLastName: "",
+  fatherCitizenId: "",
+  fatherOccupation: "",
+  fatherMonthlyIncome: "",
+  fatherPhone: "",
+  fatherStatus: "มีชีวิตอยู่",
 
-    faculty: "คณะวิทยาศาสตร์",
-    major: "วิทยาการคอมพิวเตอร์",
-    yearLevel: 1,
+  motherPrefix: "นาง",
+  motherFirstName: "",
+  motherLastName: "",
+  motherCitizenId: "",
+  motherOccupation: "",
+  motherMonthlyIncome: "",
+  motherPhone: "",
+  motherStatus: "มีชีวิตอยู่",
 
-    houseNo: "99/1",
-    villageNo: "4",
-    villageName: "บ้านตัวอย่าง",
-    soi: "-",
-    road: "กาญจนวนิช",
-    subdistrict: "คอหงส์",
-    district: "หาดใหญ่",
-    province: "สงขลา",
-    postalCode: "90110",
+  guardianRelation: "",
+  guardianPrefix: "",
+  guardianFirstName: "",
+  guardianLastName: "",
+  guardianCitizenId: "",
+  guardianOccupation: "",
+  guardianMonthlyIncome: "",
+  guardianPhone: "",
 
-    loanTypeCode: "NEW_BORROWER",
-    loanTypeName: "ผู้กู้รายใหม่",
-    loanTypeGroup: 1,
+  totalFamilyIncome: "",
+  numberOfFamilyMembers: "",
+  numberOfStudyingMembers: "",
 
-    academicYear: "2569",
-    semester: 1,
-
-    gpax: 3.12,
-    volunteerHours: 8,
-
-    eligibilityStatus: "ผ่าน",
-    applicationStatus: "ต้องแก้ไขเอกสาร",
-
-    revisionCount: 1,
-    documentCount: 6,
-    rejectedDocumentCount: 1,
-
-    currentStep: 3,
-
-    latestNotification:
-        "กรุณาแก้ไขรูปถ่ายผู้ปกครอง เนื่องจากภาพไม่ชัด",
-
-    requiresParentDocuments: true,
+  loanTypeCode: "",
+  loanTypeName: "",
+  gpax: "",
+  volunteerHours: "",
+  eligibilityStatus: "ยังไม่ได้ตรวจสอบ",
 };
 
-function StudentInfo({ goProtectedPage }) {
-    const [student, setStudent] = useState(defaultStudent);
-
-    useEffect(() => {
-        function loadSelectedStudent() {
-            try {
-                const savedStudent = localStorage.getItem(
-                    "selectedMockStudent"
-                );
-
-                if (!savedStudent) {
-                    setStudent(defaultStudent);
-                    return;
-                }
-
-                const parsedStudent =
-                    JSON.parse(savedStudent);
-
-                setStudent({
-                    ...defaultStudent,
-                    ...parsedStudent,
-                });
-            } catch (error) {
-                console.error(
-                    "ไม่สามารถอ่านข้อมูลนักศึกษาตัวอย่างได้:",
-                    error
-                );
-
-                setStudent(defaultStudent);
-            }
-        }
-
-        loadSelectedStudent();
-
-        window.addEventListener(
-            "mockStudentChanged",
-            loadSelectedStudent
-        );
-
-        return () => {
-            window.removeEventListener(
-                "mockStudentChanged",
-                loadSelectedStudent
-            );
-        };
-    }, []);
-
-    const fullName =
-        student.fullName ||
-        `${student.prefix || ""}${student.firstName || ""} ${
-            student.lastName || ""
-        }`.trim();
-
-    const formattedBirthDate = formatThaiDate(
-        student.birthDate
+function getInitialStudentForm(studentData) {
+  try {
+    const savedStudent = localStorage.getItem(
+      "selectedMockStudent"
     );
 
-    const address = formatAddress(student);
-
-    return (
-        <div className="min-h-screen bg-[#eef5ff] text-[#07116f]">
-            <header className="sticky top-0 z-50 bg-white shadow-sm">
-                <div className="flex min-h-20 flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-12">
-                    <div>
-                        <h1 className="text-2xl font-black md:text-3xl">
-                            PSU Smart Loan
-                        </h1>
-
-                        <p className="mt-1 text-sm text-gray-500">
-                            ข้อมูลส่วนตัวของนักศึกษา
-                        </p>
-                    </div>
-
-                    <nav className="flex flex-wrap items-center gap-3 font-bold">
-                        <button
-                            type="button"
-                            onClick={() =>
-                                goProtectedPage("home")
-                            }
-                            className="rounded-xl px-4 py-2 transition hover:bg-blue-50"
-                        >
-                            หน้าหลัก
-                        </button>
-
-                        
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                goProtectedPage("eligibility")
-                            }
-                            className="rounded-xl px-4 py-2 transition hover:bg-blue-50"
-                        >
-                            การคัดกรอง
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                goProtectedPage("myDocuments")
-                            }
-                            className="rounded-xl px-4 py-2 transition hover:bg-blue-50"
-                        >
-                            เอกสารของฉัน
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                goProtectedPage("status")
-                            }
-                            className="rounded-xl px-4 py-2 transition hover:bg-blue-50"
-                        >
-                            ติดตามสถานะ
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                goProtectedPage("home")
-                            }
-                            className="rounded-full bg-[#07116f] px-5 py-2 text-white transition hover:bg-[#101c8c]"
-                        >
-                            👤 นักศึกษา
-                        </button>
-                    </nav>
-                </div>
-            </header>
-
-            <main className="px-6 py-8 lg:px-12">
-                <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-[#07116f] to-[#2638b8] p-7 text-white shadow-lg md:p-10">
-                    <div className="flex flex-col gap-7 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-                            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-white/15 text-5xl ring-4 ring-white/20">
-                                👩‍🎓
-                            </div>
-
-                            <div>
-                                <p className="text-sm font-bold text-blue-200">
-                                    ข้อมูลนักศึกษาปัจจุบัน
-                                </p>
-
-                                <h2 className="mt-1 text-2xl font-black md:text-3xl">
-                                    {fullName}
-                                </h2>
-
-                                <p className="mt-2 text-blue-100">
-                                    รหัสนักศึกษา{" "}
-                                    {student.studentCode}
-                                </p>
-
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                    <StatusBadge>
-                                        {student.loanTypeName}
-                                    </StatusBadge>
-
-                                    <StatusBadge>
-                                        ชั้นปีที่{" "}
-                                        {student.yearLevel}
-                                    </StatusBadge>
-
-                                    <StatusBadge>
-                                        อายุ {student.age} ปี
-                                    </StatusBadge>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="rounded-2xl bg-white/10 p-5 backdrop-blur">
-                            <p className="text-sm font-bold text-blue-100">
-                                สถานะคำขอปัจจุบัน
-                            </p>
-
-                            <p className="mt-2 text-xl font-black">
-                                {student.applicationStatus}
-                            </p>
-
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    goProtectedPage("status")
-                                }
-                                className="mt-4 rounded-xl bg-white px-5 py-2 font-black text-[#07116f] transition hover:bg-blue-50"
-                            >
-                                ดูสถานะทั้งหมด
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
-                {student.latestNotification && (
-                    <section className="mt-6 flex items-start gap-4 rounded-2xl border border-yellow-300 bg-yellow-100 px-6 py-5 shadow-sm">
-                        <span className="text-2xl">
-                            🔔
-                        </span>
-
-                        <div>
-                            <p className="font-black text-yellow-800">
-                                การแจ้งเตือนล่าสุด
-                            </p>
-
-                            <p className="mt-1 text-yellow-700">
-                                {student.latestNotification}
-                            </p>
-                        </div>
-                    </section>
-                )}
-
-                <section className="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-                    <SummaryCard
-                        icon="✅"
-                        value={student.eligibilityStatus}
-                        label="ผลการคัดกรอง"
-                    />
-
-                    <SummaryCard
-                        icon="📄"
-                        value={student.documentCount}
-                        label="เอกสารทั้งหมด"
-                    />
-
-                    <SummaryCard
-                        icon="✏️"
-                        value={`${student.revisionCount} ครั้ง`}
-                        label="จำนวนครั้งที่แก้ไข"
-                    />
-
-                    <SummaryCard
-                        icon="⚠️"
-                        value={
-                            student.rejectedDocumentCount
-                        }
-                        label="เอกสารที่ต้องแก้"
-                        warning={
-                            student.rejectedDocumentCount > 0
-                        }
-                    />
-                </section>
-
-                <section className="mt-8 grid gap-7 xl:grid-cols-3">
-                    <div className="space-y-7 xl:col-span-2">
-                        <InformationSection
-                            title="ข้อมูลส่วนตัว"
-                            icon="👤"
-                        >
-                            <InformationGrid>
-                                <InformationItem
-                                    label="คำนำหน้าชื่อ"
-                                    value={student.prefix}
-                                />
-
-                                <InformationItem
-                                    label="ชื่อ"
-                                    value={student.firstName}
-                                />
-
-                                <InformationItem
-                                    label="นามสกุล"
-                                    value={student.lastName}
-                                />
-
-                                <InformationItem
-                                    label="รหัสนักศึกษา"
-                                    value={student.studentCode}
-                                />
-
-                                <InformationItem
-                                    label="เลขบัตรประชาชน"
-                                    value={
-                                        student.citizenId ||
-                                        "ยังไม่มีข้อมูล"
-                                    }
-                                />
-
-                                <InformationItem
-                                    label="วันเกิด"
-                                    value={formattedBirthDate}
-                                />
-
-                                <InformationItem
-                                    label="อายุปัจจุบัน"
-                                    value={`${student.age} ปี`}
-                                />
-
-                                <InformationItem
-                                    label="เงื่อนไขผู้ปกครอง"
-                                    value={
-                                        student.requiresParentDocuments
-                                            ? "ต้องใช้เอกสารผู้ปกครอง"
-                                            : "ไม่ต้องใช้เอกสารผู้ปกครอง"
-                                    }
-                                    highlight={
-                                        student.requiresParentDocuments
-                                    }
-                                />
-                            </InformationGrid>
-                        </InformationSection>
-
-                        <InformationSection
-                            title="ข้อมูลการศึกษา"
-                            icon="🎓"
-                        >
-                            <InformationGrid>
-                                <InformationItem
-                                    label="คณะ"
-                                    value={student.faculty}
-                                />
-
-                                <InformationItem
-                                    label="สาขาวิชา"
-                                    value={student.major}
-                                />
-
-                                <InformationItem
-                                    label="ชั้นปี"
-                                    value={`ชั้นปีที่ ${student.yearLevel}`}
-                                />
-
-                                <InformationItem
-                                    label="ประเภทผู้กู้"
-                                    value={
-                                        student.loanTypeName
-                                    }
-                                />
-
-                                <InformationItem
-                                    label="ปีการศึกษา"
-                                    value={
-                                        student.academicYear
-                                    }
-                                />
-
-                                <InformationItem
-                                    label="ภาคการศึกษา"
-                                    value={`ภาคการศึกษาที่ ${student.semester}`}
-                                />
-                            </InformationGrid>
-                        </InformationSection>
-
-                        <InformationSection
-                            title="ข้อมูลติดต่อและที่อยู่"
-                            icon="📍"
-                        >
-                            <InformationGrid>
-                                <InformationItem
-                                    label="หมายเลขโทรศัพท์"
-                                    value={
-                                        student.phone ||
-                                        "ยังไม่มีข้อมูล"
-                                    }
-                                />
-
-                                <InformationItem
-                                    label="อีเมล"
-                                    value={
-                                        student.email ||
-                                        "ยังไม่มีข้อมูล"
-                                    }
-                                />
-
-                                <div className="sm:col-span-2">
-                                    <InformationItem
-                                        label="ที่อยู่ปัจจุบัน"
-                                        value={address}
-                                    />
-                                </div>
-                            </InformationGrid>
-                        </InformationSection>
-                    </div>
-
-                    <div className="space-y-7">
-                        <section className="rounded-3xl bg-white p-7 shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <span className="text-3xl">
-                                    📋
-                                </span>
-
-                                <div>
-                                    <h2 className="text-xl font-black">
-                                        ข้อมูลการคัดกรอง
-                                    </h2>
-
-                                    <p className="text-sm text-gray-500">
-                                        ข้อมูลที่นักศึกษาเคยกรอก
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="mt-6 space-y-4">
-                                <ProgressInformation
-                                    label="GPAX"
-                                    value={student.gpax}
-                                    description="เกณฑ์ขั้นต่ำ 1.80"
-                                    passed={
-                                        Number(
-                                            student.gpax
-                                        ) >= 1.8
-                                    }
-                                />
-
-                                <ProgressInformation
-                                    label="ชั่วโมงจิตอาสา"
-                                    value={`${student.volunteerHours} ชั่วโมง`}
-                                    description={
-                                        student.loanTypeGroup ===
-                                        1
-                                            ? "ผู้กู้รายใหม่ต้องมีอย่างน้อย 2 ชั่วโมง"
-                                            : "ผู้กู้ต่อเนื่องต้องมีอย่างน้อย 36 ชั่วโมง"
-                                    }
-                                    passed={
-                                        student.loanTypeGroup ===
-                                        1
-                                            ? Number(
-                                                  student.volunteerHours
-                                              ) >= 2
-                                            : Number(
-                                                  student.volunteerHours
-                                              ) >= 36
-                                    }
-                                />
-
-                                <ProgressInformation
-                                    label="ผลการคัดกรอง"
-                                    value={
-                                        student.eligibilityStatus
-                                    }
-                                    description="ผลการตรวจสอบล่าสุด"
-                                    passed={
-                                        student.eligibilityStatus ===
-                                        "ผ่าน"
-                                    }
-                                />
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    goProtectedPage(
-                                        "eligibility"
-                                    )
-                                }
-                                className="mt-6 w-full rounded-xl bg-[#07116f] px-5 py-3 font-black text-white transition hover:bg-[#101c8c]"
-                            >
-                                ดูข้อมูลการคัดกรอง
-                            </button>
-                        </section>
-
-                        <section className="rounded-3xl bg-white p-7 shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <span className="text-3xl">
-                                    🧭
-                                </span>
-
-                                <div>
-                                    <h2 className="text-xl font-black">
-                                        ขั้นตอนปัจจุบัน
-                                    </h2>
-
-                                    <p className="text-sm text-gray-500">
-                                        ขั้นตอนที่{" "}
-                                        {student.currentStep} จาก
-                                        4
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="mt-6 space-y-3">
-                                <MiniStatusStep
-                                    number={1}
-                                    label="คัดกรองคุณสมบัติ"
-                                    currentStep={
-                                        student.currentStep
-                                    }
-                                />
-
-                                <MiniStatusStep
-                                    number={2}
-                                    label="อัปโหลดเอกสาร"
-                                    currentStep={
-                                        student.currentStep
-                                    }
-                                />
-
-                                <MiniStatusStep
-                                    number={3}
-                                    label="ตรวจสอบเอกสาร"
-                                    currentStep={
-                                        student.currentStep
-                                    }
-                                />
-
-                                <MiniStatusStep
-                                    number={4}
-                                    label="จองคิวลงนาม"
-                                    currentStep={
-                                        student.currentStep
-                                    }
-                                />
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    goProtectedPage("status")
-                                }
-                                className="mt-6 w-full rounded-xl border-2 border-[#07116f] px-5 py-3 font-black transition hover:bg-blue-50"
-                            >
-                                ดูประวัติสถานะ
-                            </button>
-                        </section>
-
-                        {student.requiresParentDocuments && (
-                            <section className="rounded-3xl border border-pink-300 bg-pink-50 p-7 shadow-sm">
-                                <div className="text-4xl">
-                                    👪
-                                </div>
-
-                                <h2 className="mt-4 text-xl font-black text-pink-700">
-                                    นักศึกษาอายุต่ำกว่า 20 ปี
-                                </h2>
-
-                                <p className="mt-3 leading-7 text-pink-600">
-                                    ระบบจะเพิ่มเอกสารของผู้ปกครอง
-                                    ตามเงื่อนไขของประเภทผู้กู้และภาคการศึกษา
-                                    โดยอัตโนมัติ
-                                </p>
-
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        goProtectedPage(
-                                            "myDocuments"
-                                        )
-                                    }
-                                    className="mt-5 w-full rounded-xl bg-pink-600 px-5 py-3 font-black text-white transition hover:bg-pink-700"
-                                >
-                                    ดูเอกสารที่ต้องใช้
-                                </button>
-                            </section>
-                        )}
-                    </div>
-                </section>
-
-                <section className="mt-8 flex flex-col gap-4 rounded-3xl bg-white p-7 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h2 className="text-xl font-black">
-                            ต้องการตรวจสอบข้อมูลส่วนอื่นหรือไม่
-                        </h2>
-
-                        <p className="mt-1 text-gray-500">
-                            เลือกดูข้อมูลการคัดกรอง เอกสาร
-                            หรือสถานะคำขอได้จากเมนูด้านล่าง
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                        <button
-                            type="button"
-                            onClick={() =>
-                                goProtectedPage("home")
-                            }
-                            className="rounded-xl border-2 border-[#07116f] px-5 py-3 font-black transition hover:bg-blue-50"
-                        >
-                            กลับหน้าหลัก
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                goProtectedPage(
-                                    "myDocuments"
-                                )
-                            }
-                            className="rounded-xl bg-[#07116f] px-5 py-3 font-black text-white transition hover:bg-[#101c8c]"
-                        >
-                            ดูเอกสารของฉัน
-                        </button>
-                    </div>
-                </section>
-            </main>
-        </div>
+    if (savedStudent) {
+      const parsedStudent = JSON.parse(savedStudent);
+
+      return {
+        ...initialFormData,
+        ...parsedStudent,
+      };
+    }
+  } catch (error) {
+    console.error(
+      "ไม่สามารถโหลดข้อมูลนักศึกษาได้:",
+      error
     );
+  }
+
+  if (!studentData) {
+    return {
+      ...initialFormData,
+    };
+  }
+
+  const fullName =
+    studentData.fullname ||
+    studentData.fullName ||
+    "";
+
+  const nameParts = fullName
+    .replace(/^(นาย|นางสาว|นาง)/, "")
+    .trim()
+    .split(/\s+/);
+
+  return {
+    ...initialFormData,
+
+    firstName: nameParts[0] || "",
+    lastName: nameParts.slice(1).join(" "),
+
+    studentCode:
+      studentData.studentCode ||
+      studentData.studentId ||
+      "",
+
+    birthDate:
+      studentData.birthDate ||
+      studentData.birthdate ||
+      "",
+
+    faculty: studentData.faculty || "",
+    major: studentData.major || "",
+
+    yearLevel:
+      studentData.yearLevel ||
+      studentData.year ||
+      "",
+  };
 }
 
-function StatusBadge({ children }) {
-    return (
-        <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-white">
-            {children}
-        </span>
-    );
-}
-
-function SummaryCard({
-    icon,
-    value,
-    label,
-    warning = false,
+function StudentInfo({
+  goProtectedPage,
+  setPage,
+  studentData,
+  setStudentData,
+  
 }) {
-    return (
-        <div
-            className={`rounded-3xl border p-6 shadow-sm ${
-                warning
-                    ? "border-red-200 bg-red-50"
-                    : "border-white bg-white"
-            }`}
-        >
-            <div className="flex items-center justify-between">
-                <span className="text-3xl">
-                    {icon}
-                </span>
+  const [formData, setFormData] = useState(() =>
+  getInitialStudentForm(studentData)
+);
 
-                {warning && (
-                    <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-600">
-                        ต้องดำเนินการ
-                    </span>
-                )}
-            </div>
+  const [message, setMessage] = useState("");
 
-            <p
-                className={`mt-5 text-2xl font-black ${
-                    warning
-                        ? "text-red-600"
-                        : "text-[#07116f]"
-                }`}
-            >
-                {value}
-            </p>
+  
 
-            <p className="mt-1 text-sm font-bold text-gray-500">
-                {label}
-            </p>
-        </div>
-    );
-}
-
-function InformationSection({
-    title,
-    icon,
-    children,
-}) {
-    return (
-        <section className="rounded-3xl bg-white p-7 shadow-sm">
-            <div className="flex items-center gap-3 border-b pb-5">
-                <span className="text-3xl">
-                    {icon}
-                </span>
-
-                <h2 className="text-xl font-black">
-                    {title}
-                </h2>
-            </div>
-
-            <div className="mt-6">
-                {children}
-            </div>
-        </section>
-    );
-}
-
-function InformationGrid({ children }) {
-    return (
-        <div className="grid gap-5 sm:grid-cols-2">
-            {children}
-        </div>
-    );
-}
-
-function InformationItem({
-    label,
-    value,
-    highlight = false,
-}) {
-    return (
-        <div
-            className={`rounded-2xl p-4 ${
-                highlight
-                    ? "border border-pink-200 bg-pink-50"
-                    : "bg-[#f7f9ff]"
-            }`}
-        >
-            <p className="text-xs font-bold text-gray-500">
-                {label}
-            </p>
-
-            <p
-                className={`mt-2 break-words font-black ${
-                    highlight
-                        ? "text-pink-700"
-                        : "text-[#07116f]"
-                }`}
-            >
-                {value || "ยังไม่มีข้อมูล"}
-            </p>
-        </div>
-    );
-}
-
-function ProgressInformation({
-    label,
-    value,
-    description,
-    passed,
-}) {
-    return (
-        <div className="rounded-2xl bg-[#f7f9ff] p-4">
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <p className="text-sm font-bold text-gray-500">
-                        {label}
-                    </p>
-
-                    <p className="mt-1 text-lg font-black">
-                        {value}
-                    </p>
-                </div>
-
-                <span
-                    className={`rounded-full px-3 py-1 text-xs font-black ${
-                        passed
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-600"
-                    }`}
-                >
-                    {passed ? "ผ่าน" : "ไม่ผ่าน"}
-                </span>
-            </div>
-
-            <p className="mt-2 text-xs text-gray-500">
-                {description}
-            </p>
-        </div>
-    );
-}
-
-function MiniStatusStep({
-    number,
-    label,
-    currentStep,
-}) {
-    const completed = currentStep > number;
-    const active = currentStep === number;
-
-    let circleStyle =
-        "border-2 border-gray-300 bg-white text-gray-400";
-
-    let textStyle = "text-gray-400";
-
-    if (completed) {
-        circleStyle =
-            "border-2 border-green-500 bg-green-500 text-white";
-
-        textStyle = "text-green-700";
+  const navigateToPage = (targetPage) => {
+    if (goProtectedPage) {
+      goProtectedPage(targetPage);
+      return;
     }
 
-    if (active) {
-        circleStyle =
-            "border-2 border-blue-600 bg-blue-600 text-white";
+    if (setPage) {
+      setPage(targetPage);
+    }
+  };
 
-        textStyle = "text-blue-700";
+  const handleChange = (event) => {
+  const { name, value } = event.target;
+
+  setFormData((previous) => ({
+    ...previous,
+    [name]: value,
+  }));
+};
+
+  const handleLoanTypeChange = (event) => {
+    const loanTypeCode = event.target.value;
+
+    const loanTypeNames = {
+      NEW_BORROWER: "ผู้กู้รายใหม่",
+      CONTINUING_SPECIAL:
+        "ผู้กู้ต่อเนื่องกรณีพิเศษ",
+      CONTINUING_YEAR:
+        "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
+    };
+
+    setFormData((previous) => ({
+      ...previous,
+      loanTypeCode,
+      loanTypeName:
+        loanTypeNames[loanTypeCode] || "",
+    }));
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.studentCode
+    ) {
+      setMessage(
+        "กรุณากรอกชื่อ นามสกุล และรหัสนักศึกษา"
+      );
+      return;
     }
 
-    return (
-        <div className="flex items-center gap-3 rounded-xl bg-[#f7f9ff] p-3">
+    const savedData = {
+      ...formData,
+      studentId: formData.studentCode,
+      fullName: `${formData.prefix}${formData.firstName} ${formData.lastName}`,
+      fullname: `${formData.prefix}${formData.firstName} ${formData.lastName}`,
+      birthdate: formData.birthDate,
+    };
+
+    try {
+      localStorage.setItem(
+        "selectedMockStudent",
+        JSON.stringify(savedData)
+      );
+
+      if (setStudentData) {
+        setStudentData(savedData);
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("mockStudentChanged", {
+          detail: savedData,
+        })
+      );
+
+      setMessage("บันทึกข้อมูลเรียบร้อยแล้ว");
+
+      setTimeout(() => {
+        navigateToPage("StudentProfiles");
+      }, 500);
+    } catch (error) {
+      console.error(
+        "ไม่สามารถบันทึกข้อมูลได้:",
+        error
+      );
+
+      setMessage("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#eef5ff] text-[#07116f]">
+      <header className="sticky top-0 z-50 bg-white shadow-sm">
+        <div className="mx-auto flex min-h-20 max-w-7xl flex-col gap-4 px-6 py-4 md:flex-row md:items-center md:justify-between">
+          <button
+            type="button"
+            onClick={() => navigateToPage("home")}
+            className="text-left"
+          >
+            <h1 className="text-2xl font-black">
+              PSU Smart Loan
+            </h1>
+
+            <p className="mt-1 text-sm text-gray-500">
+              มหาวิทยาลัยสงขลานครินทร์
+              วิทยาเขตหาดใหญ่
+            </p>
+          </button>
+
+          <div className="flex flex-wrap gap-2">
+            <NavButton
+              label="หน้าหลัก"
+              onClick={() =>
+                navigateToPage("home")
+              }
+            />
+
+            <NavButton
+              label="ข้อมูลของฉัน"
+              onClick={() =>
+                navigateToPage(
+                  "StudentProfiles"
+                )
+              }
+            />
+
+            <NavButton
+              label="การคัดกรอง"
+              onClick={() =>
+                navigateToPage("eligibility")
+              }
+            />
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        <div className="rounded-3xl bg-gradient-to-r from-[#07116f] to-[#0646ff] p-7 text-white shadow-lg">
+          <p className="text-sm font-bold text-blue-100">
+            แบบฟอร์มข้อมูลนักศึกษาผู้กู้ยืม
+          </p>
+
+          <h2 className="mt-2 text-2xl font-black md:text-3xl">
+            กรอกและแก้ไขข้อมูลส่วนบุคคล
+          </h2>
+
+          <p className="mt-2 text-blue-100">
+            กรุณากรอกข้อมูลให้ครบถ้วนก่อนเข้าสู่ขั้นตอนการคัดกรอง
+          </p>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="mt-7 space-y-7"
+        >
+          <FormSection
+            title="ข้อมูลส่วนบุคคล"
+            subtitle="ข้อมูลของนักศึกษาผู้ยื่นคำขอกู้ยืม"
+          >
+            <SelectField
+              label="คำนำหน้าชื่อ"
+              name="prefix"
+              value={formData.prefix}
+              onChange={handleChange}
+              options={[
+                ["นาย", "นาย"],
+                ["นางสาว", "นางสาว"],
+                ["นาง", "นาง"],
+              ]}
+            />
+
+            <InputField
+              label="ชื่อ"
+              name="firstName"
+              value={formData.firstName}
+              onChange={handleChange}
+              required
+            />
+
+            <InputField
+              label="นามสกุล"
+              name="lastName"
+              value={formData.lastName}
+              onChange={handleChange}
+              required
+            />
+
+            <InputField
+              label="เลขประจำตัวประชาชน"
+              name="citizenId"
+              value={formData.citizenId}
+              onChange={handleChange}
+              maxLength={13}
+            />
+
+            <InputField
+              label="วันเดือนปีเกิด"
+              name="birthDate"
+              type="date"
+              value={formData.birthDate}
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="สัญชาติ"
+              name="nationality"
+              value={formData.nationality}
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="ศาสนา"
+              name="religion"
+              value={formData.religion}
+              onChange={handleChange}
+            />
+
+            <SelectField
+              label="สถานภาพ"
+              name="maritalStatus"
+              value={formData.maritalStatus}
+              onChange={handleChange}
+              options={[
+                ["โสด", "โสด"],
+                ["สมรส", "สมรส"],
+                ["หย่าร้าง", "หย่าร้าง"],
+                ["หม้าย", "หม้าย"],
+              ]}
+            />
+
+            <InputField
+              label="หมายเลขโทรศัพท์"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="อีเมล"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+            />
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <TextAreaField
+                label="ที่อยู่ปัจจุบัน"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+              />
+            </div>
+
+            <InputField
+              label="จังหวัด"
+              name="province"
+              value={formData.province}
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="รหัสไปรษณีย์"
+              name="postalCode"
+              value={formData.postalCode}
+              onChange={handleChange}
+            />
+          </FormSection>
+
+          <FormSection
+            title="ข้อมูลการศึกษา"
+            subtitle="ข้อมูลนักศึกษาปัจจุบัน"
+          >
+            <InputField
+              label="รหัสนักศึกษา"
+              name="studentCode"
+              value={formData.studentCode}
+              onChange={handleChange}
+              required
+            />
+
+            <InputField
+              label="คณะ"
+              name="faculty"
+              value={formData.faculty}
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="สาขาวิชา"
+              name="major"
+              value={formData.major}
+              onChange={handleChange}
+            />
+
+            <SelectField
+              label="ชั้นปี"
+              name="yearLevel"
+              value={formData.yearLevel}
+              onChange={handleChange}
+              options={[
+                ["", "เลือกชั้นปี"],
+                ["1", "ชั้นปีที่ 1"],
+                ["2", "ชั้นปีที่ 2"],
+                ["3", "ชั้นปีที่ 3"],
+                ["4", "ชั้นปีที่ 4"],
+                ["5", "ชั้นปีที่ 5"],
+                ["6", "ชั้นปีที่ 6"],
+              ]}
+            />
+
+            <InputField
+              label="ปีการศึกษา"
+              name="academicYear"
+              value={formData.academicYear}
+              onChange={handleChange}
+            />
+
+            <SelectField
+              label="ภาคการศึกษา"
+              name="semester"
+              value={formData.semester}
+              onChange={handleChange}
+              options={[
+                ["1", "ภาคการศึกษาที่ 1"],
+                ["2", "ภาคการศึกษาที่ 2"],
+              ]}
+            />
+          </FormSection>
+
+          <FormSection
+            title="ข้อมูลประเภทผู้กู้"
+            subtitle="ข้อมูลสำหรับใช้กำหนดเงื่อนไขและเอกสาร"
+          >
+            <SelectField
+              label="ประเภทผู้กู้"
+              name="loanTypeCode"
+              value={formData.loanTypeCode}
+              onChange={
+                handleLoanTypeChange
+              }
+              options={[
+                ["", "เลือกประเภทผู้กู้"],
+                [
+                  "NEW_BORROWER",
+                  "ผู้กู้รายใหม่",
+                ],
+                [
+                  "CONTINUING_SPECIAL",
+                  "ผู้กู้ต่อเนื่องกรณีพิเศษ",
+                ],
+                [
+                  "CONTINUING_YEAR",
+                  "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
+                ],
+              ]}
+            />
+
+            <InputField
+              label="เกรดเฉลี่ยสะสม GPAX"
+              name="gpax"
+              type="number"
+              step="0.01"
+              min="0"
+              max="4"
+              value={formData.gpax}
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="ชั่วโมงจิตอาสา"
+              name="volunteerHours"
+              type="number"
+              min="0"
+              value={formData.volunteerHours}
+              onChange={handleChange}
+            />
+          </FormSection>
+
+          <FormSection
+            title="ข้อมูลบิดา"
+            subtitle="ข้อมูลผู้ปกครองฝ่ายบิดา"
+          >
+            <SelectField
+              label="คำนำหน้าชื่อ"
+              name="fatherPrefix"
+              value={formData.fatherPrefix}
+              onChange={handleChange}
+              options={[
+                ["นาย", "นาย"],
+                ["อื่น ๆ", "อื่น ๆ"],
+              ]}
+            />
+
+            <InputField
+              label="ชื่อ"
+              name="fatherFirstName"
+              value={
+                formData.fatherFirstName
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="นามสกุล"
+              name="fatherLastName"
+              value={
+                formData.fatherLastName
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="เลขประจำตัวประชาชน"
+              name="fatherCitizenId"
+              value={
+                formData.fatherCitizenId
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="อาชีพ"
+              name="fatherOccupation"
+              value={
+                formData.fatherOccupation
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="รายได้ต่อเดือน"
+              name="fatherMonthlyIncome"
+              type="number"
+              min="0"
+              value={
+                formData.fatherMonthlyIncome
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="หมายเลขโทรศัพท์"
+              name="fatherPhone"
+              value={formData.fatherPhone}
+              onChange={handleChange}
+            />
+
+            <SelectField
+              label="สถานภาพ"
+              name="fatherStatus"
+              value={formData.fatherStatus}
+              onChange={handleChange}
+              options={[
+                [
+                  "มีชีวิตอยู่",
+                  "มีชีวิตอยู่",
+                ],
+                ["เสียชีวิต", "เสียชีวิต"],
+                [
+                  "ไม่สามารถติดต่อได้",
+                  "ไม่สามารถติดต่อได้",
+                ],
+              ]}
+            />
+          </FormSection>
+
+          <FormSection
+            title="ข้อมูลมารดา"
+            subtitle="ข้อมูลผู้ปกครองฝ่ายมารดา"
+          >
+            <SelectField
+              label="คำนำหน้าชื่อ"
+              name="motherPrefix"
+              value={formData.motherPrefix}
+              onChange={handleChange}
+              options={[
+                ["นาง", "นาง"],
+                ["นางสาว", "นางสาว"],
+                ["อื่น ๆ", "อื่น ๆ"],
+              ]}
+            />
+
+            <InputField
+              label="ชื่อ"
+              name="motherFirstName"
+              value={
+                formData.motherFirstName
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="นามสกุล"
+              name="motherLastName"
+              value={
+                formData.motherLastName
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="เลขประจำตัวประชาชน"
+              name="motherCitizenId"
+              value={
+                formData.motherCitizenId
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="อาชีพ"
+              name="motherOccupation"
+              value={
+                formData.motherOccupation
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="รายได้ต่อเดือน"
+              name="motherMonthlyIncome"
+              type="number"
+              min="0"
+              value={
+                formData.motherMonthlyIncome
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="หมายเลขโทรศัพท์"
+              name="motherPhone"
+              value={formData.motherPhone}
+              onChange={handleChange}
+            />
+
+            <SelectField
+              label="สถานภาพ"
+              name="motherStatus"
+              value={formData.motherStatus}
+              onChange={handleChange}
+              options={[
+                [
+                  "มีชีวิตอยู่",
+                  "มีชีวิตอยู่",
+                ],
+                ["เสียชีวิต", "เสียชีวิต"],
+                [
+                  "ไม่สามารถติดต่อได้",
+                  "ไม่สามารถติดต่อได้",
+                ],
+              ]}
+            />
+          </FormSection>
+
+          <FormSection
+            title="ข้อมูลผู้ปกครอง"
+            subtitle="กรอกเมื่อผู้ปกครองไม่ใช่บิดาหรือมารดา"
+          >
+            <InputField
+              label="ความสัมพันธ์"
+              name="guardianRelation"
+              value={
+                formData.guardianRelation
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="คำนำหน้าชื่อ"
+              name="guardianPrefix"
+              value={
+                formData.guardianPrefix
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="ชื่อ"
+              name="guardianFirstName"
+              value={
+                formData.guardianFirstName
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="นามสกุล"
+              name="guardianLastName"
+              value={
+                formData.guardianLastName
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="เลขประจำตัวประชาชน"
+              name="guardianCitizenId"
+              value={
+                formData.guardianCitizenId
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="อาชีพ"
+              name="guardianOccupation"
+              value={
+                formData.guardianOccupation
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="รายได้ต่อเดือน"
+              name="guardianMonthlyIncome"
+              type="number"
+              min="0"
+              value={
+                formData.guardianMonthlyIncome
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="หมายเลขโทรศัพท์"
+              name="guardianPhone"
+              value={
+                formData.guardianPhone
+              }
+              onChange={handleChange}
+            />
+          </FormSection>
+
+          <FormSection
+            title="ข้อมูลรายได้ครอบครัว"
+            subtitle="ข้อมูลประกอบการพิจารณาคุณสมบัติ"
+          >
+            <InputField
+              label="รายได้รวมของครอบครัวต่อเดือน"
+              name="totalFamilyIncome"
+              type="number"
+              min="0"
+              value={
+                formData.totalFamilyIncome
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="จำนวนสมาชิกในครอบครัว"
+              name="numberOfFamilyMembers"
+              type="number"
+              min="0"
+              value={
+                formData.numberOfFamilyMembers
+              }
+              onChange={handleChange}
+            />
+
+            <InputField
+              label="จำนวนสมาชิกที่กำลังศึกษา"
+              name="numberOfStudyingMembers"
+              type="number"
+              min="0"
+              value={
+                formData.numberOfStudyingMembers
+              }
+              onChange={handleChange}
+            />
+          </FormSection>
+
+          {message && (
             <div
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black ${circleStyle}`}
+              className={`rounded-2xl border p-4 font-bold ${
+                message.includes("เรียบร้อย")
+                  ? "border-green-300 bg-green-50 text-green-700"
+                  : "border-red-300 bg-red-50 text-red-700"
+              }`}
             >
-                {completed ? "✓" : number}
+              {message}
             </div>
+          )}
 
-            <div>
-                <p className={`font-bold ${textStyle}`}>
-                    {label}
-                </p>
+          <div className="flex flex-col gap-4 rounded-3xl bg-white p-6 shadow-sm sm:flex-row sm:justify-between">
+            <button
+              type="button"
+              onClick={() =>
+                navigateToPage(
+                  "StudentProfiles"
+                )
+              }
+              className="h-14 rounded-2xl border-2 border-gray-300 bg-white px-8 font-black text-gray-700 transition hover:bg-gray-50"
+            >
+              ยกเลิก
+            </button>
 
-                <p className="text-xs text-gray-400">
-                    {completed
-                        ? "ดำเนินการแล้ว"
-                        : active
-                          ? "กำลังดำเนินการ"
-                          : "ยังไม่เริ่ม"}
-                </p>
-            </div>
-        </div>
-    );
+            <button
+              type="submit"
+              className="h-14 rounded-2xl bg-gradient-to-r from-[#0646ff] to-[#006dff] px-10 font-black text-white shadow-lg transition hover:shadow-xl"
+            >
+              บันทึกข้อมูล
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+  );
 }
 
-function formatThaiDate(dateString) {
-    if (!dateString) {
-        return "ยังไม่มีข้อมูล";
-    }
+function FormSection({
+  title,
+  subtitle,
+  children,
+}) {
+  return (
+    <section className="overflow-hidden rounded-3xl bg-white shadow-sm">
+      <div className="bg-[#07116f] px-7 py-5 text-white">
+        <h3 className="text-xl font-black">
+          {title}
+        </h3>
 
-    const date = new Date(dateString);
+        <p className="mt-1 text-sm text-blue-100">
+          {subtitle}
+        </p>
+      </div>
 
-    if (Number.isNaN(date.getTime())) {
-        return dateString;
-    }
-
-    return new Intl.DateTimeFormat("th-TH", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-    }).format(date);
+      <div className="grid gap-5 p-7 md:grid-cols-2 xl:grid-cols-3">
+        {children}
+      </div>
+    </section>
+  );
 }
 
-function formatAddress(student) {
-    const addressParts = [
-        student.houseNo &&
-            `บ้านเลขที่ ${student.houseNo}`,
-        student.villageNo &&
-            `หมู่ที่ ${student.villageNo}`,
-        student.villageName &&
-            student.villageName,
-        student.soi &&
-            student.soi !== "-" &&
-            `ซอย ${student.soi}`,
-        student.road &&
-            `ถนน ${student.road}`,
-        student.subdistrict &&
-            `ตำบล${student.subdistrict}`,
-        student.district &&
-            `อำเภอ${student.district}`,
-        student.province &&
-            `จังหวัด${student.province}`,
-        student.postalCode,
-    ].filter(Boolean);
+function InputField({
+  label,
+  name,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+  ...props
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-black text-gray-700">
+        {label}
+        {required && (
+          <span className="ml-1 text-red-500">
+            *
+          </span>
+        )}
+      </span>
 
-    if (addressParts.length === 0) {
-        return "ยังไม่มีข้อมูลที่อยู่";
-    }
+      <input
+        type={type}
+        name={name}
+        value={value ?? ""}
+        onChange={onChange}
+        required={required}
+        className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-4 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        {...props}
+      />
+    </label>
+  );
+}
 
-    return addressParts.join(" ");
+function SelectField({
+  label,
+  name,
+  value,
+  onChange,
+  options,
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-black text-gray-700">
+        {label}
+      </span>
+
+      <select
+        name={name}
+        value={value ?? ""}
+        onChange={onChange}
+        className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-4 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+      >
+        {options.map(([optionValue, labelText]) => (
+          <option
+            key={optionValue}
+            value={optionValue}
+          >
+            {labelText}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function TextAreaField({
+  label,
+  name,
+  value,
+  onChange,
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-black text-gray-700">
+        {label}
+      </span>
+
+      <textarea
+        name={name}
+        value={value ?? ""}
+        onChange={onChange}
+        rows={4}
+        className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+      />
+    </label>
+  );
+}
+
+function NavButton({ label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-xl px-4 py-2 font-bold transition hover:bg-blue-50 hover:text-blue-600"
+    >
+      {label}
+    </button>
+  );
 }
 
 export default StudentInfo;

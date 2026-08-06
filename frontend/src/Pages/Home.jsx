@@ -590,7 +590,7 @@ function Home({ goProtectedPage }) {
                                     type="button"
                                     onClick={() =>
                                         goProtectedPage(
-                                            "StudentProfiles"
+                                            "studentInfo"
                                         )
                                     }
                                     className="rounded-xl bg-[#07116f] px-7 py-3 font-black text-white transition hover:bg-[#101c8c]"

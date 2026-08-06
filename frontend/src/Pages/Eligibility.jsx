@@ -161,6 +161,10 @@ function Eligibility({ setPage, setLoanData, studentData }) {
 
   return (
     <div className="min-h-screen bg-[#eef5ff] text-[#07116f]">
+
+      
+
+
       <main className="max-w-5xl mx-auto px-8 py-8">
         <p className="text-sm font-bold text-blue-500">ขั้นตอนที่ 2 จาก 2</p>
 

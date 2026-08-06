@@ -563,10 +563,12 @@ function StudentProfiles({
             </div>
 
             <button
-              type="button"
-              onClick={() =>
-                navigateToPage("studentInfo")
-              }
+                type="button"
+                onClick={() =>
+                  navigateToPage(
+                    "studentInfo"
+                  )
+                }
               className="rounded-xl bg-white px-7 py-3 font-black text-[#07116f] shadow transition hover:bg-blue-50"
             >
               ✏️ แก้ไขข้อมูล
