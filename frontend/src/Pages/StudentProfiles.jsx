@@ -82,8 +82,90 @@ function getFullName(
     : "-";
 }
 
+function loanTypeLabelOf(code) {
+  const labels = {
+    NEW: "ผู้กู้รายใหม่",
+    CONTINUING_SPECIAL: "ผู้กู้ต่อเนื่องกรณีพิเศษ",
+    CONTINUING_YEAR: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
+  };
+
+  return labels[code] || "-";
+}
+
 function StudentProfiles({ setPage }) {
-  const { selectedStudent } = useApp();
+  const { selectedStudent: rawSelectedStudent, myProfile } = useApp();
+
+  const hasNoApplicationYet = !rawSelectedStudent;
+
+  // ผสาน myProfile (ข้อมูลส่วนตัวจริงจาก student_profiles โดยตรง) เข้ากับ
+  // rawSelectedStudent (ข้อมูลคำร้องจาก v_application_overview) เสมอ —
+  // ไม่ใช่แค่ตอนไม่มีคำร้อง เพราะ VIEW ที่ใช้ตอนมีคำร้องแล้วไม่เคยมี
+  // คอลัมน์ เลขบัตร ปชช./เบอร์โทร/อีเมล/ที่อยู่/จังหวัด/รหัสไปรษณีย์/
+  // สัญชาติ/ศาสนา/สถานภาพ เลยตั้งแต่แรก (ตกหล่นมาตั้งแต่ตอนออกแบบ view)
+  // — myProfile เป็นแหล่งข้อมูลที่ถูกต้องสำหรับฟิลด์พวกนี้เสมอ ไม่ว่าจะ
+  // มีคำร้องหรือไม่ก็ตาม จึงต้องเอามาทับเสมอ ไม่ใช่แค่ใช้ตอน fallback
+  const personalFieldsFromProfile = myProfile
+    ? {
+      fullName: `${myProfile.prefix && myProfile.prefix !== "-" ? myProfile.prefix : ""
+        }${myProfile.firstName || ""} ${myProfile.lastName || ""}`.trim(),
+      citizenId:
+        myProfile.citizenId && !/^0+$/.test(myProfile.citizenId)
+          ? myProfile.citizenId
+          : "-",
+      birthDate:
+        myProfile.birthDate &&
+          String(myProfile.birthDate).slice(0, 10) !== "2000-01-01"
+          ? myProfile.birthDate
+          : null,
+      phone: myProfile.phone || "-",
+      email: myProfile.email || "-",
+      address:
+        myProfile.houseNo && myProfile.houseNo !== "-"
+          ? myProfile.houseNo
+          : "-",
+      province:
+        myProfile.province && myProfile.province !== "-"
+          ? myProfile.province
+          : "-",
+      postalCode:
+        myProfile.postalCode && myProfile.postalCode !== "00000"
+          ? myProfile.postalCode
+          : "-",
+      studentCode: myProfile.studentId || "-",
+      studentId: myProfile.studentId || "-",
+      faculty:
+        myProfile.faculty && myProfile.faculty !== "-"
+          ? myProfile.faculty
+          : "-",
+      major:
+        myProfile.major && myProfile.major !== "-" ? myProfile.major : "-",
+      yearLevel: myProfile.yearLevel || "-",
+      loanTypeName:
+        myProfile.loanTypeCode && myProfile.loanTypeCode !== "-"
+          ? loanTypeLabelOf(myProfile.loanTypeCode)
+          : "-",
+    }
+    : {};
+
+  // ฟิลด์ที่เกี่ยวกับคำร้องโดยตรง (gpax/สถานะ/เทอม ฯลฯ) ใช้ค่าจาก
+  // rawSelectedStudent เท่านั้น ถ้าไม่มีคำร้องเลยให้ค่า default ที่สื่อ
+  // ความหมายชัดเจนแทน
+  const applicationFallback = rawSelectedStudent
+    ? {}
+    : {
+      academicYear: "-",
+      semester: "-",
+      applicationStatus: "ยังไม่มีคำร้อง",
+      eligibilityStatus: "ยังไม่ได้ตรวจสอบ",
+      gpax: null,
+      volunteerHours: null,
+    };
+
+  const selectedStudent = {
+    ...applicationFallback,
+    ...(rawSelectedStudent || {}),
+    ...personalFieldsFromProfile,
+  };
 
   // แท็บที่เปิดอยู่ตอนนี้ (0-6) — ให้ดูทีละหัวข้อแทนเลื่อนยาว
   const [activeSection, setActiveSection] = useState(0);
@@ -180,16 +262,6 @@ function StudentProfiles({ setPage }) {
       "ชั้นปี",
       selectedStudent.yearLevel
         ? `ชั้นปีที่ ${selectedStudent.yearLevel}`
-        : "-",
-    ],
-    [
-      "ปีการศึกษา",
-      selectedStudent.academicYear,
-    ],
-    [
-      "ภาคการศึกษา",
-      selectedStudent.semester
-        ? `ภาคการศึกษาที่ ${selectedStudent.semester}`
         : "-",
     ],
   ];
@@ -323,6 +395,16 @@ function StudentProfiles({ setPage }) {
   return (
     <main className="w-full px-6 py-8 lg:px-12">
       <section className="mx-auto max-w-7xl">
+        {hasNoApplicationYet && (
+          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4">
+            <span className="text-xl">ℹ️</span>
+            <p className="text-sm font-bold text-blue-700">
+              บัญชีนี้ยังไม่มีคำร้องกู้ยืม แสดงข้อมูลเท่าที่กรอกไว้จากหน้า
+              "ข้อมูลของฉัน" เท่านั้น
+            </p>
+          </div>
+        )}
+
         <div className="overflow-hidden rounded-[32px] bg-gradient-to-r from-[#07116f] to-[#0646ff] shadow-lg">
           <div className="flex flex-col gap-6 p-8 text-white lg:flex-row lg:items-center lg:justify-between lg:p-10">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
@@ -358,9 +440,7 @@ function StudentProfiles({ setPage }) {
 
             <button
               type="button"
-              onClick={() =>
-                setPage("studentInfo")
-              }
+              onClick={() => setPage("studentInfo")}
               className="rounded-2xl bg-white px-7 py-4 font-black text-[#07116f] shadow-lg transition hover:-translate-y-0.5 hover:bg-blue-50"
             >
               ✏️ แก้ไขข้อมูล
@@ -431,8 +511,8 @@ function StudentProfiles({ setPage }) {
                 type="button"
                 onClick={() => setActiveSection(index)}
                 className={`flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black transition lg:shrink ${activeSection === index
-                  ? "bg-[#07116f] text-white shadow-md"
-                  : "text-gray-600 hover:bg-blue-50"
+                    ? "bg-[#07116f] text-white shadow-md"
+                    : "text-gray-600 hover:bg-blue-50"
                   }`}
               >
                 <span className="text-lg">{section.icon}</span>
@@ -593,6 +673,18 @@ function StudentProfiles({ setPage }) {
           </button>
 
           <div className="flex flex-col gap-4 sm:flex-row">
+            <button
+              type="button"
+              onClick={() =>
+                setPage(
+                  "studentInfo"
+                )
+              }
+              className="h-14 rounded-2xl border-2 border-[#07116f] bg-white px-8 font-black text-[#07116f] transition hover:bg-blue-50"
+            >
+              ✏️ แก้ไขข้อมูล
+            </button>
+
             <button
               type="button"
               onClick={() =>

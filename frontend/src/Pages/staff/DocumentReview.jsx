@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useApp } from "../../context/AppContext";
 import {
     getBorrowerTypeLabel,
     mapBackendStatusToLabel,
@@ -6,53 +7,21 @@ import {
 } from "../../rules/documentRules";
 import {
     fetchDocumentHistory,
-    fetchStaffList,
     fetchStaffStudentDetail,
     reviewDocument,
 } from "../../services/api";
 
 function DocumentReview({ student, setPage, onSave }) {
+    const { currentUser } = useApp();
     const applicationId = student?.id;
 
     const [detail, setDetail] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
-    // ชั่วคราวจนกว่าจะมีระบบ auth จริง — backend ต้องรู้ว่าใครเป็นคนตรวจ
-    // ดึงรายชื่อเจ้าหน้าที่จริงมาให้เลือกจาก dropdown แทนพิมพ์ ID เอง
-    // (staff_id เดาไม่ได้เพราะผูกกับ users.user_id ที่เดินเลขข้าม role)
-    const [staffList, setStaffList] = useState([]);
-    const [staffId, setStaffId] = useState("");
-
-    useEffect(() => {
-        let cancelled = false;
-
-        async function loadStaffList() {
-            try {
-                const result = await fetchStaffList();
-                if (cancelled) return;
-
-                setStaffList(result.data || []);
-
-                if (result.data?.length) {
-                    setStaffId(String(result.data[0].staffId));
-                }
-            } catch (error) {
-                if (!cancelled) {
-                    setActionError(
-                        error.message || "โหลดรายชื่อเจ้าหน้าที่ไม่สำเร็จ"
-                    );
-                }
-            }
-        }
-
-        loadStaffList();
-
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
+    // ผู้ตรวจยึดจากบัญชีที่ login อยู่ตรงๆ เลย ไม่ต้องมี dropdown ให้เลือก
+    // เองอีกต่อไป (ของเดิมทำไว้ชั่วคราวตอนยังไม่มีระบบ auth จริง)
+    const staffId = currentUser?.userId;
     const [activeRequirementId, setActiveRequirementId] = useState(null);
     const [noteDraft, setNoteDraft] = useState("");
     const [actionError, setActionError] = useState("");
@@ -111,6 +80,14 @@ function DocumentReview({ student, setPage, onSave }) {
             (row) => row.requirementId === activeRequirementId
         ) || null;
 
+    // เอกสารหลักฐาน GPAX/ชั่วโมงจิตอาสา ระบบตัดสินผ่าน/ไม่ผ่านอัตโนมัติ
+    // ไปแล้วตอนคัดกรองคุณสมบัติ (เทียบกับเกณฑ์จริงตอนสร้างคำร้อง) —
+    // ไฟล์พวกนี้เป็นแค่หลักฐานประกอบให้ดูเฉยๆ ไม่ต้องให้เจ้าหน้าที่กด
+    // อนุมัติ/ตีกลับซ้ำอีก
+    const isAutoDecidedDocument =
+        activeRow?.documentCode === "GPAX_EVIDENCE" ||
+        activeRow?.documentCode === "VOLUNTEER_EVIDENCE";
+
     useEffect(() => {
         setNoteDraft(activeRow?.note || "");
         setActionError("");
@@ -124,6 +101,16 @@ function DocumentReview({ student, setPage, onSave }) {
             (result, row) => {
                 if (!row.id) {
                     result.missing += 1;
+                    return result;
+                }
+
+                // เอกสารหลักฐาน GPAX/ชั่วโมงจิตอาสา ไม่ต้องนับรวมในตัวเลข
+                // สรุปตรวจสอบ เพราะระบบตัดสินอัตโนมัติไปแล้ว ไม่ใช่รายการ
+                // ที่ "รอเจ้าหน้าที่ตรวจ" จริงๆ
+                if (
+                    row.documentCode === "GPAX_EVIDENCE" ||
+                    row.documentCode === "VOLUNTEER_EVIDENCE"
+                ) {
                     return result;
                 }
 
@@ -258,32 +245,14 @@ function DocumentReview({ student, setPage, onSave }) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <label className="rounded-xl border border-gray-200 px-3 py-2 text-sm">
+                        <div className="rounded-xl border border-gray-200 px-3 py-2 text-sm">
                             <span className="mr-2 font-bold text-gray-500">
                                 ผู้ตรวจ
                             </span>
-                            <select
-                                value={staffId}
-                                onChange={(event) =>
-                                    setStaffId(event.target.value)
-                                }
-                                className="max-w-[220px] cursor-pointer bg-transparent font-black text-[#07116f] outline-none"
-                            >
-                                {staffList.length === 0 && (
-                                    <option value="">
-                                        ไม่พบเจ้าหน้าที่ในระบบ
-                                    </option>
-                                )}
-                                {staffList.map((staff) => (
-                                    <option
-                                        key={staff.staffId}
-                                        value={staff.staffId}
-                                    >
-                                        {staff.fullName}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                            <span className="font-black text-[#07116f]">
+                                {currentUser?.fullName || "-"}
+                            </span>
+                        </div>
 
                         <button
                             type="button"
@@ -406,7 +375,10 @@ function DocumentReview({ student, setPage, onSave }) {
                                         </div>
 
                                         {row.id ? (
-                                            <StatusBadge status={row.status} />
+                                            row.documentCode === "GPAX_EVIDENCE" ||
+                                                row.documentCode === "VOLUNTEER_EVIDENCE" ? null : (
+                                                <StatusBadge status={row.status} />
+                                            )
                                         ) : (
                                             <span className="rounded-full bg-red-100 px-3 py-1.5 text-xs font-black text-red-700">
                                                 ขาดเอกสาร
@@ -440,7 +412,9 @@ function DocumentReview({ student, setPage, onSave }) {
                                         )}
                                     </div>
 
-                                    <StatusBadge status={activeRow.status} />
+                                    {isAutoDecidedDocument ? null : (
+                                        <StatusBadge status={activeRow.status} />
+                                    )}
                                 </div>
 
                                 <DocumentPreview
@@ -448,62 +422,74 @@ function DocumentReview({ student, setPage, onSave }) {
                                     mimeType={activeRow.mimeType}
                                 />
 
-                                <div className="mt-6">
-                                    <label className="mb-2 block font-black">
-                                        หมายเหตุสำหรับนักศึกษา
-                                    </label>
+                                {isAutoDecidedDocument ? (
+                                    <div className="mt-6 flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+                                        <span className="text-lg">ℹ️</span>
+                                        <p className="text-sm font-bold text-blue-700">
+                                            เอกสารนี้เป็นหลักฐานประกอบ ระบบตัดสินผ่าน/ไม่ผ่านอัตโนมัติจากเกณฑ์คัดกรองคุณสมบัติแล้ว
+                                            ไม่ต้องกดอนุมัติ/ตีกลับซ้ำ
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="mt-6">
+                                            <label className="mb-2 block font-black">
+                                                หมายเหตุสำหรับนักศึกษา
+                                            </label>
 
-                                    <textarea
-                                        rows="4"
-                                        value={noteDraft}
-                                        onChange={(event) =>
-                                            setNoteDraft(event.target.value)
-                                        }
-                                        placeholder="เช่น ภาพไม่ชัด เอกสารไม่ครบ หรือลายเซ็นไม่ครบ"
-                                        className="w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                                    />
-                                </div>
+                                            <textarea
+                                                rows="4"
+                                                value={noteDraft}
+                                                onChange={(event) =>
+                                                    setNoteDraft(event.target.value)
+                                                }
+                                                placeholder="เช่น ภาพไม่ชัด เอกสารไม่ครบ หรือลายเซ็นไม่ครบ"
+                                                className="w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                            />
+                                        </div>
 
-                                {actionError && (
-                                    <p className="mt-3 text-sm font-black text-red-600">
-                                        {actionError}
-                                    </p>
+                                        {actionError && (
+                                            <p className="mt-3 text-sm font-black text-red-600">
+                                                {actionError}
+                                            </p>
+                                        )}
+
+                                        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    handleReviewAction("ผ่าน")
+                                                }
+                                                disabled={savingAction}
+                                                className="rounded-xl bg-green-600 px-5 py-3 font-black text-white disabled:opacity-50"
+                                            >
+                                                ✓ ผ่าน
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    handleReviewAction("ต้องแก้ไข")
+                                                }
+                                                disabled={savingAction}
+                                                className="rounded-xl bg-red-600 px-5 py-3 font-black text-white disabled:opacity-50"
+                                            >
+                                                ✕ ต้องแก้ไข (ตีกลับ)
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    handleReviewAction("รอตรวจสอบ")
+                                                }
+                                                disabled={savingAction}
+                                                className="rounded-xl border border-gray-200 px-5 py-3 font-black text-gray-600 disabled:opacity-50"
+                                            >
+                                                รีเซ็ตผล
+                                            </button>
+                                        </div>
+                                    </>
                                 )}
-
-                                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            handleReviewAction("ผ่าน")
-                                        }
-                                        disabled={savingAction}
-                                        className="rounded-xl bg-green-600 px-5 py-3 font-black text-white disabled:opacity-50"
-                                    >
-                                        ✓ ผ่าน
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            handleReviewAction("ต้องแก้ไข")
-                                        }
-                                        disabled={savingAction}
-                                        className="rounded-xl bg-red-600 px-5 py-3 font-black text-white disabled:opacity-50"
-                                    >
-                                        ✕ ต้องแก้ไข (ตีกลับ)
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            handleReviewAction("รอตรวจสอบ")
-                                        }
-                                        disabled={savingAction}
-                                        className="rounded-xl border border-gray-200 px-5 py-3 font-black text-gray-600 disabled:opacity-50"
-                                    >
-                                        รีเซ็ตผล
-                                    </button>
-                                </div>
 
                                 <button
                                     type="button"
@@ -579,36 +565,13 @@ function DocumentReview({ student, setPage, onSave }) {
                 </section>
 
                 <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm">
-                    <div className="grid gap-3 sm:grid-cols-4">
-                        <SummaryBox
-                            label="ผ่าน"
-                            value={summary.approved}
-                            className="bg-green-50 text-green-700"
-                        />
-                        <SummaryBox
-                            label="ต้องแก้ไข"
-                            value={summary.rejected}
-                            className="bg-red-50 text-red-700"
-                        />
-                        <SummaryBox
-                            label="รอตรวจ"
-                            value={summary.pending}
-                            className="bg-yellow-50 text-yellow-700"
-                        />
-                        <SummaryBox
-                            label="ขาดเอกสาร"
-                            value={summary.missing}
-                            className="bg-gray-100 text-gray-700"
-                        />
-                    </div>
-
-                    <div className="mt-6 flex justify-end border-t border-gray-100 pt-5">
+                    <div className="flex justify-end">
                         <button
                             type="button"
                             onClick={handleSave}
                             className="rounded-xl bg-[#07116f] px-7 py-3 font-black text-white"
                         >
-                            เสร็จสิ้น กลับไปหน้ารายชื่อ
+                            บันทึก
                         </button>
                     </div>
                 </section>

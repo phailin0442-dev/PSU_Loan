@@ -125,13 +125,13 @@ function StudentList({ setPage, openStudentReview }) {
                         </p>
                     </div>
 
-                    <button
+                    {/* <button
                         type="button"
                         onClick={loadStudents}
                         className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-50"
                     >
                         🔄 รีเฟรช
-                    </button>
+                    </button> */}
                 </section>
 
                 <section className="rounded-3xl border border-blue-100 bg-white p-5 shadow-sm sm:p-6">
@@ -273,9 +273,6 @@ function StudentList({ setPage, openStudentReview }) {
                                         <th className="px-5 py-4 text-center">
                                             จิตอาสา
                                         </th>
-                                        <th className="px-5 py-4 text-center">
-                                            ความครบถ้วน
-                                        </th>
                                         <th className="px-5 py-4 text-center">สถานะ</th>
                                         <th className="px-5 py-4 text-center">จัดการ</th>
                                     </tr>
@@ -385,17 +382,6 @@ function StudentList({ setPage, openStudentReview }) {
                                                     </td>
 
                                                     <td className="px-5 py-5 text-center">
-                                                        <CompletionBadge
-                                                            uploaded={
-                                                                student.uploadedCount ?? 0
-                                                            }
-                                                            total={
-                                                                student.requiredCount ?? 0
-                                                            }
-                                                        />
-                                                    </td>
-
-                                                    <td className="px-5 py-5 text-center">
                                                         <StatusBadge
                                                             status={student.status}
                                                         />
@@ -457,8 +443,8 @@ function CompletionBadge({ uploaded, total }) {
     return (
         <span
             className={`inline-flex min-w-[88px] justify-center rounded-full px-3 py-1.5 text-xs font-black ${isComplete
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-700"
                 }`}
         >
             {uploaded}/{total} ไฟล์

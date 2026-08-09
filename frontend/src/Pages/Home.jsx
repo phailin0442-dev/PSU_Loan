@@ -184,7 +184,7 @@ function Home({ setPage }) {
                 <h2 className="text-2xl font-black">PSU Smart Loan</h2>
 
                 <p className="mt-2 opacity-80">
-                    ระบบคัดกรองคุณสมบัติ ตรวจสอบเอกสาร และจองคิวสำหรับนักศึกษาผู้กู้ยืมเงิน
+                    ระบบคัดกรองพร้อมจองคิวผู้กู้ยืมเงินเพื่อการศึกษา
                 </p>
 
                 <div className="mt-8 grid gap-8 md:grid-cols-2">

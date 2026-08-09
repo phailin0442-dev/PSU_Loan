@@ -2,11 +2,10 @@ import { useApp } from "../context/AppContext";
 
 function AppNavbar({ setPage }) {
     const {
-        students,
-        selectedStudentId,
-        setSelectedStudentId,
         role,
-        setRole,
+        isAuthenticated,
+        currentUser,
+        logout,
     } = useApp();
 
     const studentMenus = [
@@ -39,19 +38,9 @@ function AppNavbar({ setPage }) {
 
     const staffMenus = [
         {
-            id: "staff-home",
-            page: "home",
-            label: "หน้าหลัก",
-        },
-        {
-            id: "staff-dashboard",
-            page: "staffDashboard",
-            label: "Dashboard",
-        },
-        {
             id: "staff-student-list",
             page: "studentList",
-            label: "ตรวจสอบ",
+            label: "จัดการคำขอกู้ยืมเงิน กยศ.",
         },
         {
             id: "staff-booking",
@@ -63,24 +52,17 @@ function AppNavbar({ setPage }) {
             page: "staffReport",
             label: "รายงาน",
         },
+        {
+            id: "staff-settings",
+            page: "staffSettings",
+            label: "ตั้งค่า",
+        },
     ];
 
     const menus =
         role === "staff"
             ? staffMenus
             : studentMenus;
-
-    const handleRoleChange = (event) => {
-        const nextRole = event.target.value;
-
-        setRole(nextRole);
-
-        if (nextRole === "staff") {
-            setPage("staffDashboard");
-        } else {
-            setPage("home");
-        }
-    };
 
     return (
         <header className="sticky top-0 z-50 bg-gradient-to-r from-[#0a197c] via-[#1033a4] to-[#1858d7] text-white shadow-lg">
@@ -113,7 +95,7 @@ function AppNavbar({ setPage }) {
                             </div>
 
                             <p className="mt-1 text-sm font-medium text-blue-100">
-                                ระบบคัดกรองและตรวจสอบเอกสารผู้กู้ยืมเงินเพื่อการศึกษา
+                                ระบบคัดกรองพร้อมจองคิวผู้กู้ยืมเงินเพื่อการศึกษา
                             </p>
 
                             <p className="mt-1 text-xs text-blue-200">
@@ -122,54 +104,31 @@ function AppNavbar({ setPage }) {
                         </div>
                     </button>
 
-                    {/* ตัวเลือกข้อมูลตัวอย่าง */}
-
-                    <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto">
-                        <label className="rounded-2xl border border-white/30 bg-white px-5 py-4 text-left shadow-md">
-                            <span className="block text-xs font-black text-gray-500">
-                                นักศึกษาตัวอย่าง
+                    {isAuthenticated ? (
+                        <div className="flex items-center gap-3 rounded-2xl bg-white px-5 py-3 shadow-md xl:w-auto">
+                            <span className="text-sm font-black text-[#0a197c]">
+                                👤 {currentUser?.fullName}
                             </span>
-
-                            <select
-                                value={selectedStudentId}
-                                onChange={(event) =>
-                                    setSelectedStudentId(
-                                        Number(event.target.value)
-                                    )
-                                }
-                                className="mt-2 h-9 w-full min-w-0 cursor-pointer bg-transparent text-base font-black text-gray-800 outline-none sm:min-w-[270px]"
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    logout();
+                                    setPage("home");
+                                }}
+                                className="rounded-xl border border-[#0a197c] px-3 py-1.5 text-xs font-black text-[#0a197c] transition hover:bg-blue-50"
                             >
-                                {students.map((student) => (
-                                    <option
-                                        key={student.id}
-                                        value={student.id}
-                                    >
-                                        {student.demoLabel}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label className="rounded-2xl border border-white/30 bg-white px-5 py-4 text-left shadow-md">
-                            <span className="block text-xs font-black text-gray-500">
-                                บทบาทผู้ใช้งาน
-                            </span>
-
-                            <select
-                                value={role}
-                                onChange={handleRoleChange}
-                                className="mt-2 h-9 w-full min-w-0 cursor-pointer bg-transparent text-base font-black text-gray-800 outline-none sm:min-w-[220px]"
-                            >
-                                <option value="student">
-                                    นักศึกษา
-                                </option>
-
-                                <option value="staff">
-                                    เจ้าหน้าที่
-                                </option>
-                            </select>
-                        </label>
-                    </div>
+                                ออกจากระบบ
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setPage("login")}
+                            className="flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 font-black text-[#0a197c] shadow-md transition hover:-translate-y-0.5 hover:shadow-lg xl:w-auto"
+                        >
+                            เข้าสู่ระบบ / สมัครสมาชิก
+                        </button>
+                    )}
                 </div>
 
                 {/* เมนูตรงกลาง */}

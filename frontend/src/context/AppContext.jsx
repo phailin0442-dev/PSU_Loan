@@ -7,7 +7,15 @@ import {
     useState,
 } from "react";
 
-import { fetchStudentDetail, fetchStudentList } from "../services/api";
+import {
+    createApplication,
+    fetchMyProfile,
+    fetchStudentDetail,
+    fetchStudentList,
+    loginUser,
+    registerUser,
+    updateMyProfile,
+} from "../services/api";
 import {
     mapApplicationStatusToLabel,
     mapBackendStatusToLabel,
@@ -81,8 +89,15 @@ function mapOverviewRowToStudent(row) {
         // เพราะงั้นถ้าดึงคำร้องมาได้ แปลว่าโปรไฟล์กรอกครบแล้วจริง
         studentInfoCompleted: true,
 
-        // ผ่านคัดกรองแล้วก็ต่อเมื่อ backend ประเมินผลแล้ว (ไม่ใช่ PENDING)
+        // ผ่านคัดกรองแล้วก็ต่อเมื่อ backend ประเมินผลแล้ว (ไม่ใช่ PENDING) —
+        // ใช้แค่บอกว่า "ตรวจแล้วหรือยัง" ไม่ได้แปลว่า "ผ่าน" เสมอไป
+        // (ถ้า FAILED ก็ถือว่า "ตรวจแล้ว" เหมือนกัน)
         eligibilityCompleted: row.eligibility_status !== "PENDING",
+
+        // ตัวนี้ต่างหากที่บอกว่า "ผ่านจริง" — ใช้เช็คก่อนปล่อยเข้าหน้า
+        // อัปโหลดเอกสาร/โชว์ banner "ผ่านแล้ว" ห้ามใช้ eligibilityCompleted
+        // แทนเด็ดขาด เพราะ FAILED ก็จะ true ไปด้วย (บั๊กที่เคยเจอมาแล้ว)
+        eligibilityPassed: row.eligibility_status === "PASSED",
 
         // ต้องรอโหลดรายละเอียด (requiredDocuments) ก่อนถึงจะรู้ว่าอัปโหลดครบ
         // ไหม ใส่ false ไปก่อน แล้วไปคำนวณจริงใน mergeDetailIntoStudent
@@ -190,6 +205,8 @@ function mergeDetailIntoStudent(student, detail) {
         revisionCount,
         statusHistory,
         documentReviewHistory,
+        periodOpen: detail.periodOpen !== false,
+        periodMessage: detail.periodMessage || "",
         _detailLoaded: true,
     };
 }
@@ -225,15 +242,164 @@ export function AppProvider({ children }) {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
+    // สถานะล็อกอินจริง — เก็บ token ไว้ใน localStorage กันหายตอนรีเฟรชหน้า
+    // (แยกต่างหากจาก dropdown "นักศึกษาตัวอย่าง" ที่ยังเก็บไว้คู่กันสำหรับ
+    // demo/ทดสอบ — ไม่ได้ตัดออก)
+    const [token, setToken] = useState(
+        () => localStorage.getItem("psu_loan_token") || null
+    );
+    const [currentUser, setCurrentUser] = useState(() => {
+        try {
+            const saved = localStorage.getItem("psu_loan_user");
+            return saved ? JSON.parse(saved) : null;
+        } catch {
+            return null;
+        }
+    });
+
+    const isAuthenticated = Boolean(token && currentUser);
+
+    // โปรไฟล์ดิบ (student_profiles ตรงๆ) — ไม่ผูกกับคำร้องเลย ใช้ได้
+    // ตั้งแต่สมัครสมาชิกเสร็จ แม้ยังไม่มีคำร้องกู้ยืมสักใบก็ตาม
+    const [myProfile, setMyProfile] = useState(null);
+    const [profileLoading, setProfileLoading] = useState(false);
+
+    const refreshMyProfile = useCallback(async () => {
+        if (!currentUser?.userId) {
+            setMyProfile(null);
+            return null;
+        }
+
+        setProfileLoading(true);
+
+        try {
+            const result = await fetchMyProfile(currentUser.userId);
+            setMyProfile(result.data);
+            return result.data;
+        } catch (error) {
+            setMyProfile(null);
+            return null;
+        } finally {
+            setProfileLoading(false);
+        }
+    }, [currentUser?.userId]);
+
+    useEffect(() => {
+        if (isAuthenticated && role === "student") {
+            refreshMyProfile();
+        } else {
+            setMyProfile(null);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated, currentUser?.userId]);
+
+    const saveMyProfile = async (payload) => {
+        await updateMyProfile(currentUser.userId, payload);
+        await refreshMyProfile();
+    };
+
+    // ค่า placeholder ที่ backend ใส่ให้ตอนสมัครสมาชิก (ดู routes/auth.js
+    // POST /register) — ใช้เทียบเพื่อรู้ว่า "กรอกข้อมูลจริงแล้วหรือยัง"
+    const PLACEHOLDER_VALUES = ["-", "2000-01-01", "00000"];
+
+    const isProfileComplete = Boolean(
+        myProfile &&
+        myProfile.prefix &&
+        !PLACEHOLDER_VALUES.includes(myProfile.prefix) &&
+        myProfile.faculty &&
+        !PLACEHOLDER_VALUES.includes(myProfile.faculty) &&
+        myProfile.major &&
+        !PLACEHOLDER_VALUES.includes(myProfile.major) &&
+        myProfile.houseNo &&
+        !PLACEHOLDER_VALUES.includes(myProfile.houseNo) &&
+        myProfile.postalCode &&
+        !PLACEHOLDER_VALUES.includes(myProfile.postalCode)
+    );
+
+    const persistAuth = (nextToken, nextUser) => {
+        setToken(nextToken);
+        setCurrentUser(nextUser);
+
+        if (nextToken && nextUser) {
+            localStorage.setItem("psu_loan_token", nextToken);
+            localStorage.setItem("psu_loan_user", JSON.stringify(nextUser));
+        } else {
+            localStorage.removeItem("psu_loan_token");
+            localStorage.removeItem("psu_loan_user");
+        }
+    };
+
+    const logout = () => {
+        persistAuth(null, null);
+        setRole("student");
+    };
+
+    const login = async ({ identifier, password, role: loginRole }) => {
+        const result = await loginUser({ identifier, password, role: loginRole });
+        const { token: nextToken, user } = result.data;
+
+        persistAuth(nextToken, user);
+
+        if (user.role === "STAFF") {
+            setRole("staff");
+        } else {
+            setRole("student");
+            // รีโหลดลิสต์ใหม่ทั้งหมด แล้วให้ฟังก์ชันเลือกคำร้องของตัวเอง
+            // ให้อัตโนมัติ (ถ้ามี) —ใช้ user จาก response ตรงๆ แทน currentUser
+            // เพราะ state ยังไม่อัปเดตทันในรอบ render เดียวกัน
+            const mapped = await refreshStudentList();
+            const own = mapped.find(
+                (student) =>
+                    Number(student.studentUserId) === Number(user.userId)
+            );
+            if (own) setSelectedStudentId(own.id);
+        }
+
+        return user;
+    };
+
+    const register = async (payload) => {
+        const result = await registerUser(payload);
+        const { token: nextToken, user } = result.data;
+
+        persistAuth(nextToken, user);
+        setRole("student");
+
+        // สมัครใหม่ยังไม่มีคำร้อง (application) เลย — refresh ลิสต์ไว้
+        // เผื่อมีอยู่แล้ว (เช่นกรณีสมัครซ้ำ) แต่ตามปกติจะไม่เจอ ต้องไปสร้าง
+        // คำร้องใหม่ผ่าน createNewApplication() ที่หน้าคัดกรองต่อ
+        await refreshStudentList();
+
+        return user;
+    };
+
+    // สร้างคำร้องกู้ยืมใหม่ (ใช้ตอนบัญชีที่ login อยู่ยังไม่มีคำร้องเลย)
+    // แล้ว refresh + เลือกคำร้องที่เพิ่งสร้างให้อัตโนมัติ
+    const createNewApplication = async (payload) => {
+        const result = await createApplication(payload);
+        await refreshStudentList({
+            selectApplicationId: result.data.applicationId,
+        });
+        return result.data;
+    };
+
+    // มีคำร้องเป็นของตัวเองอยู่แล้วไหม (ใช้เช็คว่าต้องพาไปสร้างคำร้องใหม่
+    // ก่อนไหม สำหรับบัญชีที่เพิ่ง register)
+    const hasOwnApplication =
+        role !== "student" ||
+        !isAuthenticated ||
+        students.some(
+            (student) =>
+                Number(student.studentUserId) === Number(currentUser?.userId)
+        );
+
     /*
     |----------------------------------------------------------------
     | โหลดรายชื่อคำร้องทั้งหมดจาก backend ตอนเปิดแอปครั้งแรก
     |----------------------------------------------------------------
     */
-    useEffect(() => {
-        let cancelled = false;
-
-        async function loadStudents() {
+    const refreshStudentList = useCallback(
+        async ({ selectApplicationId } = {}) => {
             setLoading(true);
             setLoadError("");
 
@@ -243,30 +409,44 @@ export function AppProvider({ children }) {
                     mapOverviewRowToStudent
                 );
 
-                if (cancelled) return;
-
                 setStudents(mapped);
 
                 if (mapped.length > 0) {
-                    setSelectedStudentId(mapped[0].id);
-                }
-            } catch (error) {
-                if (!cancelled) {
-                    setLoadError(
-                        error.message ||
-                        "โหลดรายชื่อนักศึกษาจากเซิร์ฟเวอร์ไม่สำเร็จ"
+                    const preferred = selectApplicationId
+                        ? mapped.find(
+                            (student) => student.id === selectApplicationId
+                        )
+                        : currentUser
+                            ? mapped.find(
+                                (student) =>
+                                    Number(student.studentUserId) ===
+                                    Number(currentUser.userId)
+                            )
+                            : null;
+
+                    setSelectedStudentId(
+                        preferred ? preferred.id : mapped[0].id
                     );
                 }
+
+                return mapped;
+            } catch (error) {
+                setLoadError(
+                    error.message ||
+                    "โหลดรายชื่อนักศึกษาจากเซิร์ฟเวอร์ไม่สำเร็จ"
+                );
+                return [];
             } finally {
-                if (!cancelled) setLoading(false);
+                setLoading(false);
             }
-        }
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [currentUser]
+    );
 
-        loadStudents();
-
-        return () => {
-            cancelled = true;
-        };
+    useEffect(() => {
+        refreshStudentList();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     /*
@@ -308,13 +488,29 @@ export function AppProvider({ children }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedStudentId]);
 
-    const selectedStudent = useMemo(
-        () =>
+    const selectedStudent = useMemo(() => {
+        // ถ้า login เป็นนักศึกษาจริงอยู่ ต้องเห็นแค่ข้อมูลของตัวเองเท่านั้น
+        // ห้าม fallback ไปโชว์คนอื่นเด็ดขาด (ต่อให้หาไม่เจอเพราะยังไม่มี
+        // คำร้องเลยก็ตาม — คืน null ไปดีกว่าโชว์ข้อมูลผิดคน)
+        if (isAuthenticated && role === "student" && currentUser) {
+            return (
+                students.find(
+                    (student) =>
+                        Number(student.studentUserId) ===
+                        Number(currentUser.userId)
+                ) || null
+            );
+        }
+
+        // กรณีอื่น (ยังไม่ login / เป็นเจ้าหน้าที่) ใช้ selectedStudentId ปกติ
+        return (
             students.find(
                 (student) => student.id === selectedStudentId
-            ) || students[0] || null,
-        [students, selectedStudentId]
-    );
+            ) ||
+            students[0] ||
+            null
+        );
+    }, [students, selectedStudentId, isAuthenticated, role, currentUser]);
 
     // เก็บไว้เผื่อหน้าไหนยังเรียกใช้แบบ optimistic local update อยู่
     // (เช่นตอนพิมพ์หมายเหตุในฟอร์มก่อนกดส่งจริง)
@@ -342,6 +538,20 @@ export function AppProvider({ children }) {
                 setRole,
                 loading,
                 loadError,
+                token,
+                currentUser,
+                isAuthenticated,
+                login,
+                register,
+                logout,
+                createNewApplication,
+                hasOwnApplication,
+                refreshStudentList,
+                myProfile,
+                profileLoading,
+                refreshMyProfile,
+                saveMyProfile,
+                isProfileComplete,
             }}
         >
             {children}

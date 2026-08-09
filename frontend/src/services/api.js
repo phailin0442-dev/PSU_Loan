@@ -64,6 +64,47 @@ export async function uploadStudentDocument(
 |--------------------------------------------------------------------------
 */
 
+export async function updateHomeContent(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/staff/home-content`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+}
+
+export async function fetchApplicationPeriods() {
+    const response = await fetch(
+        `${API_BASE_URL}/api/staff/application-periods`
+    );
+    return handleResponse(response);
+}
+
+export async function saveApplicationPeriod(payload) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/staff/application-periods`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        }
+    );
+    return handleResponse(response);
+}
+
+export async function toggleApplicationPeriod(periodId) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/staff/application-periods/${periodId}/toggle`,
+        { method: "PATCH" }
+    );
+    return handleResponse(response);
+}
+
+export async function fetchStaffDashboard() {
+    const response = await fetch(`${API_BASE_URL}/api/staff/dashboard`);
+    return handleResponse(response);
+}
+
 export async function fetchStaffStudentList({ status, search } = {}) {
     const params = new URLSearchParams();
 
@@ -117,6 +158,52 @@ export async function reviewDocument(
         }
     );
 
+    return handleResponse(response);
+}
+
+export async function loginUser({ identifier, password, role }) {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, password, role }),
+    });
+    return handleResponse(response);
+}
+
+export async function registerUser(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+}
+
+export async function fetchMyProfile(userId) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/student/profile/${userId}`
+    );
+    return handleResponse(response);
+}
+
+export async function updateMyProfile(userId, payload) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/student/profile/${userId}`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        }
+    );
+    return handleResponse(response);
+}
+
+export async function createApplication(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/student/applications`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
     return handleResponse(response);
 }
 

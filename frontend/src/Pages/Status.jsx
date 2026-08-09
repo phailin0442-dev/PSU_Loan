@@ -7,7 +7,18 @@ function getSteps(student) {
     const statusCode = student?.applicationStatusCode;
 
     const personalDone = Boolean(student?.studentInfoCompleted);
-    const eligibilityDone = Boolean(student?.eligibilityCompleted);
+
+    // ใช้ค่าสถานะดิบตรงๆ แยกให้ชัดเจนระหว่าง "ยังไม่ตรวจ" / "ผ่าน" /
+    // "ไม่ผ่าน" — ห้ามใช้ eligibilityCompleted เพราะ true ทั้ง PASSED
+    // และ FAILED (เป็นบั๊กที่เคยเจอมาแล้วในหน้าอื่น)
+    const rawEligibilityStatus = student?.eligibilityStatus;
+    const eligibilityPassed =
+        rawEligibilityStatus === "PASSED" || rawEligibilityStatus === "NOT_REQUIRED";
+    const eligibilityFailed = rawEligibilityStatus === "FAILED";
+    const eligibilityDone = eligibilityPassed; // ใช้คำว่า "เสร็จ" เฉพาะตอนผ่านจริงเท่านั้น
+
+    // ไม่ผ่านคัดกรอง = ตันอยู่ตรงนั้นเลย ห้ามให้ขั้นถัดไปดูเหมือนกำลัง
+    // ดำเนินการอยู่ (เพราะความจริงไปต่อไม่ได้แล้ว)
     const uploadDone = Boolean(student?.documentsCompleted);
 
     const reviewApproved = [
@@ -30,20 +41,25 @@ function getSteps(student) {
         {
             label: "คัดกรอง",
             done: eligibilityDone,
+            needsFix: eligibilityFailed,
             statusText: eligibilityDone
-                ? "เสร็จแล้ว"
-                : personalDone
-                    ? "กำลังดำเนินการ"
-                    : "รอดำเนินการ",
+                ? "ผ่านแล้ว"
+                : eligibilityFailed
+                    ? "ไม่ผ่านเกณฑ์"
+                    : personalDone
+                        ? "กำลังดำเนินการ"
+                        : "รอดำเนินการ",
         },
         {
             label: "อัปโหลดเอกสาร",
             done: uploadDone,
             statusText: uploadDone
                 ? "เสร็จแล้ว"
-                : eligibilityDone
-                    ? "กำลังดำเนินการ"
-                    : "รอดำเนินการ",
+                : eligibilityFailed
+                    ? "ไม่สามารถดำเนินการต่อได้"
+                    : eligibilityDone
+                        ? "กำลังดำเนินการ"
+                        : "รอดำเนินการ",
         },
         {
             label: "ตรวจเอกสาร",
@@ -117,13 +133,23 @@ function Status({ setPage }) {
                                 </p>
                             </div>
 
-                            <button
-                                type="button"
-                                onClick={() => setPage?.("studentProfiles")}
-                                className="rounded-xl bg-[#eef5ff] px-4 py-2 text-sm font-black text-[#07116f] transition hover:bg-blue-100"
-                            >
-                                ดูรายละเอียดทั้งหมด
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {/* <button
+                                    type="button"
+                                    onClick={() => refreshSelectedStudentDetail()}
+                                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-black text-[#07116f] transition hover:bg-gray-50"
+                                >
+                                    🔄 รีเฟรช
+                                </button> */}
+
+                                <button
+                                    type="button"
+                                    onClick={() => setPage?.("studentProfiles")}
+                                    className="rounded-xl bg-[#eef5ff] px-4 py-2 text-sm font-black text-[#07116f] transition hover:bg-blue-100"
+                                >
+                                    ดูรายละเอียดทั้งหมด
+                                </button>
+                            </div>
                         </div>
 
                         <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -137,13 +163,15 @@ function Status({ setPage }) {
                                     >
                                         <div
                                             className={`flex h-11 w-11 items-center justify-center rounded-full text-base font-black ${step.done
-                                                    ? "bg-green-500 text-white"
+                                                ? "bg-green-500 text-white"
+                                                : step.needsFix
+                                                    ? "bg-red-500 text-white"
                                                     : isActive
                                                         ? "bg-blue-600 text-white"
                                                         : "bg-gray-200 text-gray-400"
                                                 }`}
                                         >
-                                            {step.done ? "✓" : index + 1}
+                                            {step.done ? "✓" : step.needsFix ? "✕" : index + 1}
                                         </div>
 
                                         <p className="mt-3 text-sm font-black text-[#07116f]">
@@ -152,12 +180,12 @@ function Status({ setPage }) {
 
                                         <p
                                             className={`mt-0.5 text-xs font-bold ${step.done
-                                                    ? "text-green-600"
-                                                    : step.needsFix
-                                                        ? "text-red-600"
-                                                        : isActive
-                                                            ? "text-blue-600"
-                                                            : "text-gray-400"
+                                                ? "text-green-600"
+                                                : step.needsFix
+                                                    ? "text-red-600"
+                                                    : isActive
+                                                        ? "text-blue-600"
+                                                        : "text-gray-400"
                                                 }`}
                                         >
                                             {step.statusText}
@@ -255,10 +283,10 @@ function Status({ setPage }) {
                                                 <td className="px-4 py-3 text-xs">
                                                     <span
                                                         className={`rounded-full px-2.5 py-1 font-black ${item.newStatusLabel === "ผ่าน"
-                                                                ? "bg-green-100 text-green-700"
-                                                                : item.newStatusLabel === "ต้องแก้ไข"
-                                                                    ? "bg-red-100 text-red-700"
-                                                                    : "bg-yellow-100 text-yellow-700"
+                                                            ? "bg-green-100 text-green-700"
+                                                            : item.newStatusLabel === "ต้องแก้ไข"
+                                                                ? "bg-red-100 text-red-700"
+                                                                : "bg-yellow-100 text-yellow-700"
                                                             }`}
                                                     >
                                                         {item.newStatusLabel}

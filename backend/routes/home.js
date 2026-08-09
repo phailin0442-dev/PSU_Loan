@@ -1,4 +1,5 @@
 const express = require("express");
+const pool = require("../config/db");
 
 const router = express.Router();
 
@@ -80,29 +81,58 @@ const featureCards = [
     },
 ];
 
-router.get("/", (req, res) => {
-    res.status(200).json({
-        success: true,
-        data: {
-            system: {
-                title: "PSU ระบบจัดการข้อมูลผู้กู้ยืมเงิน",
-                university: "มหาวิทยาลัยสงขลานครินทร์ วิทยาเขตหาดใหญ่",
+/*
+|--------------------------------------------------------------------------
+| เนื้อหาหน้าประชาสัมพันธ์ (public, ไม่ต้อง login)
+|--------------------------------------------------------------------------
+| GET /api/home
+|--------------------------------------------------------------------------
+| banner/notice ดึงจากตาราง home_content จริง (เจ้าหน้าที่แก้ได้ผ่าน
+| PUT /api/staff/home-content) ส่วน featureCards/homeContents (ขั้นตอน)
+| ยังเป็น static ในไฟล์นี้ก่อน — ยังไม่ทำหน้าแก้ไขสองส่วนนี้จากฐานข้อมูล
+|--------------------------------------------------------------------------
+*/
+router.get("/", async (req, res) => {
+    try {
+        const contentResult = await pool.query(
+            `SELECT banner_title, banner_subtitle, banner_description, notice
+             FROM psu_loan.home_content
+             ORDER BY content_id DESC
+             LIMIT 1`
+        );
+
+        const content = contentResult.rows[0] || {};
+
+        res.status(200).json({
+            success: true,
+            data: {
+                system: {
+                    title: "PSU ระบบจัดการข้อมูลผู้กู้ยืมเงิน",
+                    university: "มหาวิทยาลัยสงขลานครินทร์ วิทยาเขตหาดใหญ่",
+                },
+
+                banner: {
+                    title: content.banner_title || "กยศ.",
+                    subtitle:
+                        content.banner_subtitle ||
+                        "กองทุนเงินให้กู้ยืมเพื่อการศึกษา",
+                    description: content.banner_description || "",
+                },
+
+                notice: content.notice || "",
+
+                featureCards,
+                homeContents,
             },
+        });
+    } catch (error) {
+        console.error("GET /api/home error:", error);
 
-            banner: {
-                title: "กยศ.",
-                subtitle: "กองทุนเงินให้กู้ยืมเพื่อการศึกษา",
-                description:
-                    "สนับสนุนโอกาสทางการศึกษาให้แก่นักศึกษาที่ขาดแคลนทุนทรัพย์ พร้อมระบบตรวจสอบเอกสารออนไลน์และจองคิวส่งเอกสาร",
-            },
-
-            notice:
-                "ผู้กู้ยืมที่มีความประสงค์จะกู้ยืมต่อในเทอม/ปีการศึกษา กรุณาดำเนินการตามขั้นตอนและตรวจสอบเอกสารให้ครบถ้วน",
-
-            featureCards,
-            homeContents,
-        },
-    });
+        res.status(500).json({
+            success: false,
+            message: "ไม่สามารถโหลดข้อมูลหน้าแรกได้",
+        });
+    }
 });
 
 module.exports = router;

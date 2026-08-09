@@ -253,56 +253,64 @@ router.get("/students", async (req, res) => {
         const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
         const query = `
-            SELECT
-                a.application_id AS id,
-                sp.student_code AS "studentId",
-                CONCAT_WS(
-                    ' ',
-                    NULLIF(BTRIM(sp.prefix), ''),
-                    NULLIF(BTRIM(sp.first_name), ''),
-                    NULLIF(BTRIM(sp.last_name), '')
-                ) AS "fullName",
-                sp.faculty,
-                sp.major,
-                sp.year_level AS year,
-                EXTRACT(
-                    YEAR FROM AGE(CURRENT_DATE, sp.birth_date)
-                )::INTEGER AS age,
-                lt.loan_type_name AS "borrowerType",
-                lt.loan_type_code AS "borrowerCode",
-                a.semester,
-                a.academic_year AS "academicYear",
-                a.gpax,
-                a.volunteer_hours AS "volunteerHours",
-                a.eligibility_status AS "eligibilityStatus",
-                a.application_status AS "statusCode",
-                ${APPLICATION_STATUS_LABEL_CASE} AS status,
-                a.submitted_at AS "submittedAt",
-                CASE
-                    WHEN a.submitted_at IS NOT NULL
-                    THEN TO_CHAR(a.submitted_at AT TIME ZONE 'Asia/Bangkok', 'DD/MM/YYYY')
-                    ELSE '-'
-                END AS "submittedDate",
-                (
-                    SELECT COUNT(*)
-                    FROM psu_loan.document_requirements dr
-                    WHERE dr.loan_type_id = a.loan_type_id
-                      AND dr.academic_year = a.academic_year
-                      AND dr.semester = a.semester
-                      AND dr.is_active = TRUE
-                      AND (dr.min_age IS NULL OR dr.min_age <= EXTRACT(YEAR FROM AGE(CURRENT_DATE, sp.birth_date))::INTEGER)
-                      AND (dr.max_age IS NULL OR dr.max_age >= EXTRACT(YEAR FROM AGE(CURRENT_DATE, sp.birth_date))::INTEGER)
-                )::INTEGER AS "requiredCount",
-                (
-                    SELECT COUNT(*)
-                    FROM psu_loan.application_documents ad
-                    WHERE ad.application_id = a.application_id AND ad.is_current = TRUE
-                )::INTEGER AS "uploadedCount"
-            FROM psu_loan.applications AS a
-            INNER JOIN psu_loan.student_profiles AS sp ON sp.student_id = a.student_id
-            INNER JOIN psu_loan.loan_types AS lt ON lt.loan_type_id = a.loan_type_id
-            ${whereClause}
-            ORDER BY a.submitted_at DESC NULLS LAST, a.created_at DESC
+            SELECT * FROM (
+                SELECT
+                    a.application_id AS id,
+                    sp.student_code AS "studentId",
+                    CONCAT_WS(
+                        ' ',
+                        NULLIF(BTRIM(sp.prefix), ''),
+                        NULLIF(BTRIM(sp.first_name), ''),
+                        NULLIF(BTRIM(sp.last_name), '')
+                    ) AS "fullName",
+                    sp.faculty,
+                    sp.major,
+                    sp.year_level AS year,
+                    EXTRACT(
+                        YEAR FROM AGE(CURRENT_DATE, sp.birth_date)
+                    )::INTEGER AS age,
+                    lt.loan_type_name AS "borrowerType",
+                    lt.loan_type_code AS "borrowerCode",
+                    a.semester,
+                    a.academic_year AS "academicYear",
+                    a.gpax,
+                    a.volunteer_hours AS "volunteerHours",
+                    a.eligibility_status AS "eligibilityStatus",
+                    a.application_status AS "statusCode",
+                    ${APPLICATION_STATUS_LABEL_CASE} AS status,
+                    a.submitted_at AS "submittedAt",
+                    CASE
+                        WHEN a.submitted_at IS NOT NULL
+                        THEN TO_CHAR(a.submitted_at AT TIME ZONE 'Asia/Bangkok', 'DD/MM/YYYY')
+                        ELSE '-'
+                    END AS "submittedDate",
+                    (
+                        SELECT COUNT(*)
+                        FROM psu_loan.document_requirements dr
+                        WHERE dr.loan_type_id = a.loan_type_id
+                          AND dr.academic_year = a.academic_year
+                          AND dr.semester = a.semester
+                          AND dr.is_active = TRUE
+                          AND (dr.min_age IS NULL OR dr.min_age <= EXTRACT(YEAR FROM AGE(CURRENT_DATE, sp.birth_date))::INTEGER)
+                          AND (dr.max_age IS NULL OR dr.max_age >= EXTRACT(YEAR FROM AGE(CURRENT_DATE, sp.birth_date))::INTEGER)
+                    )::INTEGER AS "requiredCount",
+                    (
+                        SELECT COUNT(*)
+                        FROM psu_loan.application_documents ad
+                        WHERE ad.application_id = a.application_id AND ad.is_current = TRUE
+                    )::INTEGER AS "uploadedCount"
+                FROM psu_loan.applications AS a
+                INNER JOIN psu_loan.student_profiles AS sp ON sp.student_id = a.student_id
+                INNER JOIN psu_loan.loan_types AS lt ON lt.loan_type_id = a.loan_type_id
+                ${whereClause}
+            ) sub
+            -- โชว์เฉพาะคนที่คัดกรอง "ผ่าน" (หรือไม่ต้องคัดกรอง) และอัปโหลด
+            -- เอกสารครบ 100% แล้วเท่านั้น — คัดกรองไม่ผ่าน/ยังไม่ตรวจ/
+            -- อัปโหลดไม่ครบ ไม่มีอะไรให้เจ้าหน้าที่ตรวจ ไม่ต้องขึ้นในลิสต์นี้
+            WHERE sub."eligibilityStatus" IN ('PASSED', 'NOT_REQUIRED')
+              AND sub."requiredCount" > 0
+              AND sub."uploadedCount" >= sub."requiredCount"
+            ORDER BY sub."submittedAt" ASC NULLS LAST
         `;
 
         const result = await pool.query(query, params);
@@ -830,6 +838,216 @@ router.get("/list", async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "ไม่สามารถโหลดรายชื่อเจ้าหน้าที่ได้",
+        });
+    }
+});
+
+/*
+|--------------------------------------------------------------------------
+| แก้ไขเนื้อหาหน้าประชาสัมพันธ์ (banner + notice)
+|--------------------------------------------------------------------------
+| PUT /api/staff/home-content
+|--------------------------------------------------------------------------
+| Body: { bannerTitle, bannerSubtitle, bannerDescription, notice, staffId }
+|--------------------------------------------------------------------------
+*/
+
+router.put("/home-content", async (req, res) => {
+    try {
+        const {
+            bannerTitle,
+            bannerSubtitle,
+            bannerDescription,
+            notice,
+            staffId,
+        } = req.body;
+
+        if (!bannerTitle || !bannerSubtitle) {
+            return res.status(400).json({
+                success: false,
+                message: "กรุณากรอกหัวข้อและคำอธิบายย่อยให้ครบ",
+            });
+        }
+
+        const parsedStaffId = parsePositiveInteger(staffId);
+
+        // มีแค่แถวเดียวเสมอ (singleton) — ถ้ายังไม่มีแถวเลยให้ insert
+        // ถ้ามีแล้วให้ update แถวล่าสุด
+        const existing = await pool.query(
+            `SELECT content_id FROM psu_loan.home_content ORDER BY content_id DESC LIMIT 1`
+        );
+
+        if (existing.rowCount === 0) {
+            await pool.query(
+                `INSERT INTO psu_loan.home_content
+                    (banner_title, banner_subtitle, banner_description, notice, updated_by)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [
+                    bannerTitle,
+                    bannerSubtitle,
+                    bannerDescription || "",
+                    notice || "",
+                    parsedStaffId,
+                ]
+            );
+        } else {
+            await pool.query(
+                `UPDATE psu_loan.home_content
+                 SET banner_title = $1,
+                     banner_subtitle = $2,
+                     banner_description = $3,
+                     notice = $4,
+                     updated_by = $5
+                 WHERE content_id = $6`,
+                [
+                    bannerTitle,
+                    bannerSubtitle,
+                    bannerDescription || "",
+                    notice || "",
+                    parsedStaffId,
+                    existing.rows[0].content_id,
+                ]
+            );
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "บันทึกเนื้อหาหน้าประชาสัมพันธ์เรียบร้อยแล้ว",
+        });
+    } catch (error) {
+        console.error("PUT /api/staff/home-content error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "ไม่สามารถบันทึกเนื้อหาหน้าประชาสัมพันธ์ได้",
+        });
+    }
+});
+
+/*
+|--------------------------------------------------------------------------
+| ช่วงเวลาเปิดรับยื่นกู้
+|--------------------------------------------------------------------------
+| GET /api/staff/application-periods — ดูทั้งหมด
+| PUT /api/staff/application-periods — สร้าง/แก้ไข (upsert ตาม ปี+เทอม)
+| PATCH /api/staff/application-periods/:id/toggle — เปิด/ปิดด่วน
+|--------------------------------------------------------------------------
+*/
+
+router.get("/application-periods", async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT
+                period_id AS "periodId",
+                academic_year AS "academicYear",
+                semester,
+                start_date AS "startDate",
+                end_date AS "endDate",
+                is_open AS "isOpen"
+             FROM psu_loan.application_periods
+             ORDER BY academic_year DESC, semester ASC`
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: result.rows,
+        });
+    } catch (error) {
+        console.error("GET /api/staff/application-periods error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "ไม่สามารถโหลดช่วงเวลาเปิดรับยื่นกู้ได้",
+        });
+    }
+});
+
+router.put("/application-periods", async (req, res) => {
+    try {
+        const { academicYear, semester, startDate, endDate, isOpen } =
+            req.body;
+
+        if (!academicYear || !semester || !startDate || !endDate) {
+            return res.status(400).json({
+                success: false,
+                message: "กรุณากรอกปีการศึกษา เทอม และวันที่ให้ครบ",
+            });
+        }
+
+        if (new Date(endDate) < new Date(startDate)) {
+            return res.status(400).json({
+                success: false,
+                message: "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม",
+            });
+        }
+
+        const result = await pool.query(
+            `INSERT INTO psu_loan.application_periods
+                (academic_year, semester, start_date, end_date, is_open)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (academic_year, semester)
+             DO UPDATE SET
+                start_date = EXCLUDED.start_date,
+                end_date = EXCLUDED.end_date,
+                is_open = EXCLUDED.is_open
+             RETURNING period_id AS "periodId"`,
+            [academicYear, semester, startDate, endDate, isOpen !== false]
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "บันทึกช่วงเวลาเปิดรับยื่นกู้เรียบร้อยแล้ว",
+            data: result.rows[0],
+        });
+    } catch (error) {
+        console.error("PUT /api/staff/application-periods error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "ไม่สามารถบันทึกช่วงเวลาเปิดรับยื่นกู้ได้",
+        });
+    }
+});
+
+router.patch("/application-periods/:id/toggle", async (req, res) => {
+    try {
+        const periodId = parsePositiveInteger(req.params.id);
+
+        if (!periodId) {
+            return res.status(400).json({
+                success: false,
+                message: "รหัสช่วงเวลาไม่ถูกต้อง",
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE psu_loan.application_periods
+             SET is_open = NOT is_open
+             WHERE period_id = $1
+             RETURNING is_open AS "isOpen"`,
+            [periodId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "ไม่พบช่วงเวลานี้",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: result.rows[0],
+        });
+    } catch (error) {
+        console.error(
+            "PATCH /api/staff/application-periods/:id/toggle error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "ไม่สามารถเปลี่ยนสถานะช่วงเวลาได้",
         });
     }
 });

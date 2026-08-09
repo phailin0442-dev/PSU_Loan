@@ -14,11 +14,12 @@ import UploadDocuments from "./Pages/UploadDocuments";
 import Booking from "./Pages/Booking";
 import Status from "./Pages/Status";
 
-import StaffDashboard from "./Pages/staff/StaffDashboard";
+import StaffReport from "./Pages/staff/StaffReport";
 import StudentList from "./Pages/staff/StudentList";
 import DocumentReview from "./Pages/staff/DocumentReview";
 import StaffBooking from "./Pages/staff/StaffBooking";
-import StaffReport from "./Pages/staff/StaffReport";
+import StaffSettings from "./Pages/staff/StaffSettings";
+import Login from "./login/Login";
 
 function AppContent() {
   const [page, setPage] = useState("home");
@@ -30,6 +31,9 @@ function AppContent() {
   const {
     selectedStudent,
     students,
+    isAuthenticated,
+    hasOwnApplication,
+    isProfileComplete,
   } = useApp();
 
   /*
@@ -39,21 +43,44 @@ function AppContent() {
   */
 
   const goProtectedPage = (targetPage) => {
+    // ด่านแรกสุด — ทุกหน้ายกเว้น "หน้าหลัก" กับ "เข้าสู่ระบบ" เอง
+    // ต้อง login ก่อนถึงจะเข้าได้ (ตามที่ต้องการตั้งแต่แรก)
+    const publicPages = ["home", "login"];
+
+    if (!publicPages.includes(targetPage) && !isAuthenticated) {
+      alert("กรุณาเข้าสู่ระบบก่อนใช้งานส่วนนี้");
+      setPage("login");
+      return;
+    }
+
+    // ลำดับที่ต้องการ: login/register เสร็จ -> กรอกข้อมูลส่วนตัวให้ครบ
+    // ก่อนเสมอ ถึงจะไปหน้า "คำขอกู้ยืมเงิน กยศ." (สร้างคำร้อง/คัดกรอง) ได้
+    // เช็คจาก myProfile ตรงๆ (ไม่ผูกกับคำร้อง จึงใช้ได้ตั้งแต่สมัครเสร็จ)
     if (
       targetPage === "eligibility" &&
-      !selectedStudent?.studentInfoCompleted
+      !isProfileComplete
     ) {
-      alert(
-        "กรุณากรอกข้อมูลส่วนบุคคลให้ครบก่อน"
-      );
-
+      alert("กรุณากรอกข้อมูลส่วนบุคคลให้ครบก่อน");
       setPage("studentInfo");
+      return;
+    }
+
+    // หน้าที่ต้องมีคำร้องกู้ยืมอยู่แล้วถึงจะเข้าได้ (อัปโหลด/สถานะ/จองคิว)
+    // ถ้ายังไม่มีคำร้องเลย ให้ไปหน้าคำขอกู้ยืมก่อน (ซึ่งจะเช็คโปรไฟล์ต่อเอง
+    // ถ้ายังกรอกไม่ครบ)
+    if (
+      ["uploadDocuments", "booking"].includes(targetPage) &&
+      !hasOwnApplication
+    ) {
+      alert("กรุณายื่นคำขอกู้ยืมเงินก่อนใช้งานส่วนนี้");
+      setPage("eligibility");
       return;
     }
 
     if (
       targetPage === "uploadDocuments" &&
-      !selectedStudent?.eligibilityCompleted
+      selectedStudent?.eligibilityStatus !== "PASSED" &&
+      selectedStudent?.eligibilityStatus !== "NOT_REQUIRED"
     ) {
       alert(
         "กรุณาผ่านการคัดกรองก่อน"
@@ -63,15 +90,27 @@ function AppContent() {
       return;
     }
 
-    if (
-      targetPage === "booking" &&
-      !selectedStudent?.documentsCompleted
-    ) {
+    // "จองคิว" ต้องรอ "เจ้าหน้าที่ตรวจเอกสารผ่านแล้ว" เท่านั้น — แค่
+    // อัปโหลดครบ (documentsCompleted) ไม่พอ เพราะเอกสารอาจยัง
+    // "รอตรวจสอบ" อยู่ก็ได้ ต้องเช็คสถานะคำร้องจริงจาก backend
+    const approvedStatuses = [
+      "DOCUMENT_APPROVED",
+      "QUEUE_BOOKED",
+      "SIGNED",
+      "CENTRAL_SUBMITTED",
+      "COMPLETED",
+    ];
+
+    const isApprovedForBooking = approvedStatuses.includes(
+      selectedStudent?.applicationStatusCode
+    );
+
+    if (targetPage === "booking" && !isApprovedForBooking) {
       alert(
-        "กรุณาอัปโหลดเอกสารให้ครบก่อน"
+        "ต้องรอผลการตรวจสอบเอกสารว่า \"ผ่าน\" ก่อน ถึงจะจองคิวได้"
       );
 
-      setPage("uploadDocuments");
+      setPage("status");
       return;
     }
 
@@ -185,17 +224,6 @@ function AppContent() {
       |--------------------------------------------------------------------------
       */
 
-      case "staffDashboard":
-        return (
-          <StaffDashboard
-            students={students}
-            setPage={setPage}
-            openStudentReview={
-              openStudentReview
-            }
-          />
-        );
-
       case "studentList":
         return (
           <StudentList
@@ -262,6 +290,9 @@ function AppContent() {
           />
         );
 
+      case "staffSettings":
+        return <StaffSettings />;
+
       default:
         return (
           <Home
@@ -272,11 +303,13 @@ function AppContent() {
   };
 
   return (
-    <AppLayout
-      setPage={goProtectedPage}
-    >
-      {renderPage()}
-    </AppLayout>
+    <>
+      {page === "login" ? (
+        <Login setPage={setPage} />
+      ) : (
+        <AppLayout setPage={goProtectedPage}>{renderPage()}</AppLayout>
+      )}
+    </>
   );
 }
 

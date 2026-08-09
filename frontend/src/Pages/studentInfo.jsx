@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 
 const loanTypeLabels = {
-    NEW_BORROWER: "ผู้กู้รายใหม่",
+    NEW: "ผู้กู้รายใหม่",
     CONTINUING_SPECIAL:
         "ผู้กู้ต่อเนื่องกรณีพิเศษ",
     CONTINUING_YEAR:
@@ -13,6 +13,8 @@ function StudentInfo({ setPage }) {
     const {
         selectedStudent,
         updateSelectedStudent,
+        myProfile,
+        saveMyProfile,
     } = useApp();
 
     const [formData, setFormData] =
@@ -37,11 +39,74 @@ function StudentInfo({ setPage }) {
     const [messageType, setMessageType] =
         useState("");
 
+    // รวม effect เดียว — เดิมแยกเป็น 2 effect (จาก selectedStudent กับ
+    // myProfile) ซึ่งแย่งกันเขียนทับ formData เวลา selectedStudent เปลี่ยน
+    // (แม้ค่ายังเป็น null เหมือนเดิม) จะรีเซ็ตทับข้อมูลที่ myProfile เพิ่ง
+    // เติมไปแล้ว ทำให้ข้อมูลหาย/บันทึกไม่ได้ — รวมเป็นตัวเดียวรันพร้อมกัน
+    // เสมอ กัน race condition นี้
     useEffect(() => {
-        setFormData(selectedStudent || {});
         setMessage("");
         setMessageType("");
-    }, [selectedStudent]);
+
+        setFormData((current) => {
+            // เริ่มจาก selectedStudent (ถ้ามีคำร้องอยู่แล้ว จะมีข้อมูล
+            // ทุกแท็บรวมทั้งบิดา/มารดา/ครอบครัวที่เป็น local state)
+            const base = { ...current, ...(selectedStudent || {}) };
+
+            // myProfile คือข้อมูลจริงจาก student_profiles (ไม่ผูกกับคำร้อง)
+            // ใช้ทับแท็บ "ข้อมูลส่วนบุคคล"/"การศึกษา" เสมอ เพราะเป็นข้อมูล
+            // จริงจาก backend มีให้ใช้ตั้งแต่สมัครสมาชิกเสร็จ
+            if (!myProfile) return base;
+
+            return {
+                ...base,
+                studentId: myProfile.studentId || base.studentId || "",
+                prefix:
+                    myProfile.prefix && myProfile.prefix !== "-"
+                        ? myProfile.prefix
+                        : base.prefix || "",
+                firstName: myProfile.firstName || base.firstName || "",
+                lastName: myProfile.lastName || base.lastName || "",
+                citizenId:
+                    myProfile.citizenId && !/^0+$/.test(myProfile.citizenId)
+                        ? myProfile.citizenId
+                        : base.citizenId || "",
+                birthDate:
+                    myProfile.birthDate &&
+                        String(myProfile.birthDate).slice(0, 10) !== "2000-01-01"
+                        ? String(myProfile.birthDate).slice(0, 10)
+                        : base.birthDate || "",
+                phone: myProfile.phone || base.phone || "",
+                email: myProfile.email || base.email || "",
+                faculty:
+                    myProfile.faculty && myProfile.faculty !== "-"
+                        ? myProfile.faculty
+                        : base.faculty || "",
+                major:
+                    myProfile.major && myProfile.major !== "-"
+                        ? myProfile.major
+                        : base.major || "",
+                yearLevel: myProfile.yearLevel || base.yearLevel || "",
+                province:
+                    myProfile.province && myProfile.province !== "-"
+                        ? myProfile.province
+                        : base.province || "",
+                postalCode:
+                    myProfile.postalCode && myProfile.postalCode !== "00000"
+                        ? myProfile.postalCode
+                        : base.postalCode || "",
+                address:
+                    myProfile.houseNo && myProfile.houseNo !== "-"
+                        ? myProfile.houseNo
+                        : base.address || "",
+                loanTypeCode:
+                    myProfile.loanTypeCode &&
+                        myProfile.loanTypeCode !== "-"
+                        ? myProfile.loanTypeCode
+                        : base.loanTypeCode || "",
+            };
+        });
+    }, [selectedStudent, myProfile]);
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -57,12 +122,18 @@ function StudentInfo({ setPage }) {
         }
     };
 
-    const handleSubmit = (event) => {
+    const handleSubmit = async (event) => {
         event.preventDefault();
 
         // แม็ปฟิลด์บังคับไปยังแท็บที่ฟิลด์นั้นอยู่ ใช้กระโดดไปแท็บที่ขาด
         // ข้อมูลให้อัตโนมัติ จะได้ไม่งงว่ากรอกไม่ครบตรงไหน
+        //
+        // หมายเหตุ: ตัด semester/loanTypeCode ออกจากฟิลด์บังคับตรงนี้แล้ว
+        // เพราะย้ายไปเก็บตอน "สร้างคำร้องกู้ยืม" (หน้าคำขอกู้ยืมเงิน กยศ.)
+        // แทน — หน้านี้เก็บแค่ "ข้อมูลส่วนตัว" ที่ผูกกับ student_profiles
+        // ตรงๆ ซึ่งมีอยู่แล้วตั้งแต่สมัครสมาชิกเสร็จ ไม่ต้องรอมีคำร้องก่อน
         const requiredFieldTabs = {
+            prefix: 0,
             firstName: 0,
             lastName: 0,
             citizenId: 0,
@@ -70,11 +141,11 @@ function StudentInfo({ setPage }) {
             phone: 0,
             email: 0,
             address: 0,
+            province: 0,
+            postalCode: 0,
             faculty: 1,
             major: 1,
             yearLevel: 1,
-            semester: 1,
-            loanTypeCode: 6,
         };
 
         const requiredFields = Object.keys(requiredFieldTabs);
@@ -96,8 +167,26 @@ function StudentInfo({ setPage }) {
 
             setActiveSection(firstMissingTab);
 
+            const fieldLabels = {
+                prefix: "คำนำหน้า",
+                firstName: "ชื่อ",
+                lastName: "นามสกุล",
+                citizenId: "เลขบัตรประชาชน",
+                birthDate: "วันเกิด",
+                phone: "เบอร์โทร",
+                email: "อีเมล",
+                address: "ที่อยู่",
+                province: "จังหวัด",
+                postalCode: "รหัสไปรษณีย์",
+                faculty: "คณะ",
+                major: "สาขาวิชา",
+                yearLevel: "ชั้นปี",
+            };
+
             setMessage(
-                "กรุณากรอกข้อมูลที่มีเครื่องหมาย * ให้ครบถ้วน"
+                `กรุณากรอกข้อมูลให้ครบ ยังขาด: ${missingFields
+                    .map((field) => fieldLabels[field] || field)
+                    .join(", ")}`
             );
             setMessageType("error");
             return;
@@ -113,57 +202,54 @@ function StudentInfo({ setPage }) {
             formData.loanTypeCode
             ] || "-";
 
-        updateSelectedStudent({
-            ...formData,
+        // บันทึกจริงลง student_profiles ก่อน (ไม่ผูกกับคำร้อง ใช้ได้เสมอ)
+        setMessage("");
+        setMessageType("");
 
-            fullName,
-            fullname: fullName,
+        try {
+            await saveMyProfile({
+                citizenId: formData.citizenId,
+                prefix: formData.prefix,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                birthDate: formData.birthDate,
+                phone: formData.phone,
+                faculty: formData.faculty,
+                major: formData.major,
+                yearLevel: Number(formData.yearLevel),
+                houseNo: formData.address,
+                subdistrict: myProfile?.subdistrict || "-",
+                district: myProfile?.district || "-",
+                province: formData.province,
+                postalCode: formData.postalCode,
+                loanTypeCode: formData.loanTypeCode || null,
+            });
+        } catch (error) {
+            setMessage(
+                error.message || "บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
+            );
+            setMessageType("error");
+            return;
+        }
 
-            semester: Number(
-                formData.semester
-            ),
-
-            yearLevel:
-                formData.yearLevel
-                    ? Number(
-                        formData.yearLevel
-                    )
-                    : "",
-
-            loanTypeName:
-                selectedLoanTypeLabel,
-
-            borrowerType:
-                selectedLoanTypeLabel,
-
-            borrowerTypeCode:
-                formData.loanTypeCode,
-
-            studentInfoCompleted: true,
-
-            eligibilityCompleted: false,
-
-            documentsCompleted: false,
-
-            eligibilityStatus:
-                "ยังไม่ได้ตรวจสอบ",
-
-            applicationStatus:
-                "รอคัดกรองคุณสมบัติ",
-
-            qualificationDocuments: [],
-
-            documents: [],
-        });
+        // หมายเหตุ: เอา updateSelectedStudent() ที่เคยอยู่ตรงนี้ออกแล้ว —
+        // ของเดิมบังคับรีเซ็ต eligibilityCompleted/documentsCompleted เป็น
+        // false ทุกครั้งที่บันทึกข้อมูลส่วนตัว ทั้งที่ไม่ควรมีผลต่อกัน
+        // เลย (เป็นโค้ดเก่าตกค้างจากตอนยังไม่เชื่อม backend จริง) ตอนนี้
+        // saveMyProfile() ข้างบนบันทึกจริงลง student_profiles แล้ว และ
+        // ข้อมูลคำร้อง (ถ้ามี) ก็ดึงจาก backend ตรงๆ อยู่แล้ว ไม่ต้องแตะ
+        // สถานะคัดกรอง/เอกสารจากหน้านี้เลย
 
         setMessage(
-            "บันทึกข้อมูลเรียบร้อยแล้ว กำลังกลับไปหน้าข้อมูลนักศึกษา"
+            "บันทึกข้อมูลเรียบร้อยแล้ว"
         );
 
         setMessageType("success");
 
+        alert("✅ บันทึกข้อมูลเรียบร้อยแล้ว");
+
         setTimeout(() => {
-            setPage("studentProfiles");
+            setPage("eligibility");
         }, 700);
     };
 
@@ -226,8 +312,7 @@ function StudentInfo({ setPage }) {
                     </div>
                 </div>
 
-                <form
-                    onSubmit={handleSubmit}
+                <div
                     className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-start"
                 >
                     {/* Sidebar เลือกหัวข้อ */}
@@ -265,6 +350,7 @@ function StudentInfo({ setPage }) {
                                 <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                                     <SelectInput
                                         label="คำนำหน้าชื่อ"
+                                        required
                                         name="prefix"
                                         value={
                                             formData.prefix
@@ -433,6 +519,7 @@ function StudentInfo({ setPage }) {
 
                                     <Input
                                         label="จังหวัด"
+                                        required
                                         name="province"
                                         value={
                                             formData.province
@@ -445,6 +532,7 @@ function StudentInfo({ setPage }) {
 
                                     <Input
                                         label="รหัสไปรษณีย์"
+                                        required
                                         name="postalCode"
                                         value={
                                             formData.postalCode
@@ -492,6 +580,7 @@ function StudentInfo({ setPage }) {
                                             handleChange
                                         }
                                         placeholder="กรอกรหัสนักศึกษา"
+                                        disabled
                                     />
 
                                     <Input
@@ -562,40 +651,6 @@ function StudentInfo({ setPage }) {
                                         ]}
                                     />
 
-                                    <Input
-                                        label="ปีการศึกษา"
-                                        name="academicYear"
-                                        value={
-                                            formData.academicYear
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
-                                        placeholder="เช่น 2569"
-                                        inputMode="numeric"
-                                    />
-
-                                    <SelectInput
-                                        label="ภาคการศึกษา"
-                                        required
-                                        name="semester"
-                                        value={
-                                            formData.semester
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
-                                        options={[
-                                            {
-                                                value: "1",
-                                                label: "ภาคการศึกษาที่ 1",
-                                            },
-                                            {
-                                                value: "2",
-                                                label: "ภาคการศึกษาที่ 2",
-                                            },
-                                        ]}
-                                    />
                                 </div>
                             </FormSection>
                         )}
@@ -885,7 +940,7 @@ function StudentInfo({ setPage }) {
                                         }
                                         options={[
                                             {
-                                                value: "NEW_BORROWER",
+                                                value: "NEW",
                                                 label: "ผู้กู้รายใหม่",
                                             },
                                             {
@@ -989,7 +1044,12 @@ function StudentInfo({ setPage }) {
                                     </button>
                                 ) : (
                                     <button
-                                        type="submit"
+                                        type="button"
+                                        onClick={() =>
+                                            handleSubmit({
+                                                preventDefault: () => { },
+                                            })
+                                        }
                                         className="h-14 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-10 font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
                                     >
                                         💾 บันทึกข้อมูลนักศึกษา
@@ -998,7 +1058,7 @@ function StudentInfo({ setPage }) {
                             </div>
                         </div>
                     </div>
-                </form>
+                </div>
             </section>
         </main>
     );
