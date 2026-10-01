@@ -325,8 +325,8 @@ function StudentInfo({ setPage }) {
                                     setActiveSection(index)
                                 }
                                 className={`flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black transition lg:shrink ${activeSection === index
-                                        ? "bg-[#07116f] text-white shadow-md"
-                                        : "text-gray-600 hover:bg-blue-50"
+                                    ? "bg-[#07116f] text-white shadow-md"
+                                    : "text-gray-600 hover:bg-blue-50"
                                     }`}
                             >
                                 <span className="text-lg">
@@ -1356,4 +1356,4 @@ function Textarea({
     );
 }
 
-export default StudentInfo;
+export default StudentInfo; 

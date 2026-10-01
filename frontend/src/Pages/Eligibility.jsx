@@ -44,6 +44,11 @@ function Eligibility({ setPage }) {
   // เก็บไว้ใน NewApplicationForm เอง — เพราะพอสร้างสำเร็จ hasOwnApplication
   // จะเปลี่ยนค่าทันที ทำให้ NewApplicationForm ถูกถอดออกจากหน้าจอไปเลย
   // (unmount) ก่อนจะทันโชว์ผล ถ้าเก็บ state ไว้แค่ในนั้นจะหายไปด้วย
+  //
+  // หมายเหตุ: ผลลัพธ์ตรงนี้อาจเป็นได้ทั้ง "ผ่าน" และ "ไม่ผ่าน" (GPAX
+  // ไม่ผ่าน) เพราะ GPAX ไม่ผ่านก็ยังต้องสร้างคำร้องจริงที่ backend
+  // (บันทึกเป็น ELIGIBILITY_FAILED) ต่างจากชั่วโมงจิตอาสาที่ถูกกันไว้
+  // ตั้งแต่ฝั่งหน้าเว็บ ไม่ปล่อยให้ยิงไป backend เลยถ้ายังไม่ผ่าน
   const [justCreatedResult, setJustCreatedResult] = useState(null);
 
   const [gpax, setGpax] = useState(selectedStudent?.gpax ?? "");
@@ -179,9 +184,56 @@ function Eligibility({ setPage }) {
   // จังหวะที่เพิ่งสร้างคำร้องสำเร็จ (จาก NewApplicationForm เรียก
   // callback ขึ้นมา) — โชว์ผลตรงนี้เลยที่ระดับบนสุด ไม่ต้องพึ่ง
   // hasOwnApplication ที่อาจจะยังไม่อัปเดตทันในรอบ render เดียวกัน
+  //
+  // สำคัญ: ต้องแยกแสดงผลตาม `passed` จริงๆ — เดิมคำนวณ `passed` ไว้
+  // แต่ไม่เคยเอาไปใช้ตัดสินใจ JSX เลย ทำให้ต่อให้ GPAX ไม่ผ่าน (บันทึก
+  // ELIGIBILITY_FAILED ที่ backend สำเร็จแล้ว) หน้านี้ก็ยังโชว์การ์ด
+  // "ผ่านการคัดกรอง" อยู่ดี (บั๊ก)
   if (justCreatedResult) {
     const passed =
       justCreatedResult.applicationStatus !== "ELIGIBILITY_FAILED";
+
+    if (!passed) {
+      return (
+        <main className="w-full overflow-y-auto px-4 py-4 lg:px-6">
+          <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-5 rounded-[28px] bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 py-7 text-white shadow-md">
+              <div className="flex items-center gap-5">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-3xl ring-2 ring-white/20">
+                  📋
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-blue-100">
+                    ขั้นตอนการคัดกรองคุณสมบัติ
+                  </p>
+                  <h1 className="mt-1 text-2xl font-black leading-tight md:text-3xl">
+                    {currentUser?.fullName || "-"}
+                  </h1>
+                </div>
+              </div>
+            </div>
+
+            <section className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+              <SectionHeader
+                icon="⚠️"
+                title="ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติ"
+                subtitle="คำร้องถูกบันทึกไว้ในระบบแล้ว แต่ยังไม่ผ่านเกณฑ์เบื้องต้น"
+              />
+              <div className="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-3xl">
+                  ⚠️
+                </div>
+                <p className="max-w-md text-sm leading-6 text-gray-500">
+                  คำร้องของภาคการศึกษานี้ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติเบื้องต้น
+                  (GPAX ต้องมากกว่า 1.80) ระบบได้บันทึกผลนี้ไว้แล้ว
+                  กรุณาติดต่อเจ้าหน้าที่หากมีข้อสงสัยเกี่ยวกับผลการคัดกรอง
+                </p>
+              </div>
+            </section>
+          </section>
+        </main>
+      );
+    }
 
     return (
       <main className="w-full overflow-y-auto px-4 py-4 lg:px-6">
@@ -695,37 +747,34 @@ function NewApplicationForm({
       return;
     }
 
-    // เช็คเกณฑ์คุณสมบัติฝั่งหน้าเว็บก่อนเสมอ (ก่อนยิงไป backend) —
-    // ถ้าไม่ผ่าน ห้ามสร้างคำร้องในฐานข้อมูลเด็ดขาด เพราะสร้างได้แค่
-    // ครั้งเดียวต่อคำร้อง/เทอม ถ้าสร้างไปแล้ว "ไม่ผ่าน" ค้างไว้จะกลับมา
-    // แก้ไขไม่ได้อีก — ใช้เกณฑ์เดียวกับที่ backend ตัดสินจริงเป๊ะ:
-    //   - GPAX ต้อง "มากกว่า" 1.80 ทุกประเภทผู้กู้เหมือนกัน
-    //   - ผู้กู้รายใหม่ (NEW): จิตอาสาต้อง "มากกว่า" 1 ชั่วโมง
-    //   - ผู้กู้ต่อเนื่อง 2 ประเภท: จิตอาสาต้อง "มากกว่าหรือเท่ากับ" 36 ชม.
+    // เดิม: เช็ค GPAX กับชั่วโมงจิตอาสารวมกันเป็นเงื่อนไขเดียว ถ้าอันใด
+    // อันหนึ่งไม่ผ่านจะ return ก่อนเรียก createNewApplication เสมอ ทำให้
+    // "GPAX ไม่ผ่าน" ไม่เคยถูกบันทึกที่ backend เลย (บั๊ก — ตามที่คุยกัน
+    // ไว้ GPAX ไม่ผ่านต้องบันทึกเป็น ELIGIBILITY_FAILED ที่ backend ทันที
+    // ส่วนชั่วโมงจิตอาสาไม่ผ่านให้กันไว้แค่ฝั่งหน้าเว็บ ไม่ส่งไปเลย)
+    //
+    // แก้ใหม่: แยกเช็คชั่วโมงจิตอาสาออกมาต่างหาก เป็นเงื่อนไขเดียวที่
+    // block การส่งข้อมูลทั้งหมด (เพราะพิมพ์ผิดแก้ไขเองได้ก่อนกดส่งจริง
+    // ไม่จำเป็นต้องสร้าง record ที่ backend เพื่อบันทึกความผิดพลาดนี้)
+    // ส่วน GPAX ไม่เช็คฝั่งหน้าเว็บอีกต่อไป ปล่อยให้ backend เป็นคนตัดสิน
+    // และบันทึกผลจริง (ผ่าน/ไม่ผ่าน) เสมอ เพราะ GPAX ไม่ผ่านถือเป็นผลสรุป
+    // ที่นักศึกษาแก้ไขข้อมูลย้อนหลังเองไม่ได้ ต้องมีบันทึกที่ backend
+    // ไว้เป็นหลักฐานให้เจ้าหน้าที่เห็น
     if (semesterOne) {
-      const numGpax = Number(gpax);
       const numHours = Number(hours);
       const minVolunteerHours = loanTypeCode === "NEW" ? 1 : 36;
 
-      const gpaxPassed = numGpax > 1.8;
       const hoursPassed =
         loanTypeCode === "NEW"
           ? numHours > minVolunteerHours
           : numHours >= minVolunteerHours;
 
-      if (!gpaxPassed || !hoursPassed) {
-        const reasons = [];
-        if (!gpaxPassed) reasons.push("GPAX ต้องมากกว่า 1.80");
-        if (!hoursPassed) {
-          reasons.push(
-            loanTypeCode === "NEW"
-              ? "ชั่วโมงจิตอาสาต้องมากกว่า 1 ชั่วโมง"
-              : "ชั่วโมงจิตอาสาต้องมากกว่าหรือเท่ากับ 36 ชั่วโมง"
-          );
-        }
-
+      if (!hoursPassed) {
         setError(
-          `ยังไม่ผ่านเกณฑ์คุณสมบัติเบื้องต้น: ${reasons.join(", ")} กรุณาแก้ไขข้อมูลแล้วลองอีกครั้ง`
+          `ยังไม่ผ่านเกณฑ์คุณสมบัติเบื้องต้น: ${loanTypeCode === "NEW"
+            ? "ชั่วโมงจิตอาสาต้องมากกว่า 1 ชั่วโมง"
+            : "ชั่วโมงจิตอาสาต้องมากกว่าหรือเท่ากับ 36 ชั่วโมง"
+          } กรุณาแก้ไขข้อมูลแล้วลองอีกครั้ง`
         );
         return;
       }
@@ -734,9 +783,11 @@ function NewApplicationForm({
     setSubmitting(true);
 
     try {
-      // ผ่านเกณฑ์แล้วแน่นอนถึงจะมาถึงจุดนี้ — สร้างคำร้องจริง
-      // (ยังไม่มีไฟล์แนบ เพราะต้องมี application_id
-      //    ก่อนถึงจะอัปโหลดเอกสารผูกกับคำร้องได้)
+      // มาถึงจุดนี้แปลว่าชั่วโมงจิตอาสาผ่านแน่นอนแล้ว (หรือเทอม 2 ไม่ต้อง
+      // ตรวจ) ส่วน GPAX อาจจะผ่านหรือไม่ผ่านก็ได้ — ให้สร้างคำร้องจริง
+      // เสมอ backend จะเป็นคนตัดสินและบันทึก eligibility_status /
+      // application_status ที่ถูกต้องให้เอง (PASSED กับ DOCUMENT_REVIEW
+      // หรือ FAILED กับ ELIGIBILITY_FAILED)
       const result = await createNewApplication({
         studentUserId: currentUser?.userId,
         loanTypeCode,
@@ -747,7 +798,9 @@ function NewApplicationForm({
       });
 
       // 2) หา requirementId ของ GPAX_EVIDENCE / VOLUNTEER_EVIDENCE ของ
-      //    คำร้องที่เพิ่งสร้าง แล้วอัปโหลดไฟล์แนบทั้ง 2 ไฟล์ต่อทันที
+      //    คำร้องที่เพิ่งสร้าง แล้วอัปโหลดไฟล์แนบทั้ง 2 ไฟล์ต่อทันที —
+      //    อัปโหลดเป็นหลักฐานเก็บไว้เสมอไม่ว่า GPAX จะผ่านหรือไม่ก็ตาม
+      //    เพื่อให้เจ้าหน้าที่เห็นไฟล์ประกอบตอนตรวจสอบคำร้องที่ไม่ผ่าน
       if (semesterOne && gpaxFile && hoursFile) {
         const detail = await fetchStudentDetail(result.applicationId);
         const requiredDocs = detail.data?.requiredDocuments || [];
@@ -780,6 +833,8 @@ function NewApplicationForm({
       // state ในนี้เอง เพราะพอสร้างสำเร็จ hasOwnApplication จะเปลี่ยน
       // ทันที ทำให้ component นี้ถูกถอดออกจากหน้าจอ (unmount) ก่อนจะทัน
       // โชว์ผล — ต้องยกไปเก็บที่ระดับบนสุดที่ไม่ถูก unmount แทน
+      // (parent จะเป็นคนแยกแสดงหน้า "ผ่าน" หรือ "ไม่ผ่าน" เองจาก
+      // applicationStatus ที่ส่งไป)
       onCreated(result);
     } catch (err) {
       setError(err.message || "สร้างคำร้องไม่สำเร็จ");
