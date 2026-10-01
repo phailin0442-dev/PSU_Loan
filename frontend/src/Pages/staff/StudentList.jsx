@@ -39,6 +39,8 @@ function StudentList({ setPage, openStudentReview }) {
     };
 
     useEffect(() => {
+        // โหลดรายชื่อจาก API ครั้งแรกตอนเปิดหน้า — เป็นกรณีที่ใช้ effect ได้ถูกต้อง
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadStudents();
     }, []);
 
@@ -290,7 +292,7 @@ function StudentList({ setPage, openStudentReview }) {
                                     {filteredStudents.length === 0 ? (
                                         <tr>
                                             <td
-                                                colSpan="9"
+                                                colSpan="8"
                                                 className="px-6 py-20 text-center"
                                             >
                                                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 text-3xl">
@@ -441,21 +443,6 @@ function NotRequiredBadge() {
     return (
         <span className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-500">
             ไม่ตรวจ
-        </span>
-    );
-}
-
-function CompletionBadge({ uploaded, total }) {
-    const isComplete = total > 0 && uploaded >= total;
-
-    return (
-        <span
-            className={`inline-flex min-w-[88px] justify-center rounded-full px-3 py-1.5 text-xs font-black ${isComplete
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700"
-                }`}
-        >
-            {uploaded}/{total} ไฟล์
         </span>
     );
 }

@@ -77,7 +77,7 @@ function AppNavbar({ setPage }) {
                             onClick={() => setPage("login")}
                             className="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black text-[#0a197c] shadow-sm transition hover:bg-blue-50 sm:px-4 sm:text-sm"
                         >
-                            เข้าสู่ระบบ
+                            เข้าสู่ระบบ/ลงทะเบียน
                         </button>
                     )}
                 </div>
