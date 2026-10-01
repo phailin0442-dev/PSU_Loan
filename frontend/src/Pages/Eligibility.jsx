@@ -78,6 +78,7 @@ function Eligibility({ setPage }) {
     rawEligibilityStatus === "NOT_REQUIRED";
   const alreadyFailed = rawEligibilityStatus === "FAILED";
 
+<<<<<<< HEAD
   const semesterTwo = Number(selectedStudent?.semester) === 2;
 
   const minHours = selectedStudent?.loanTypeCode === "NEW" ? 1 : 36;
@@ -214,9 +215,105 @@ function Eligibility({ setPage }) {
         onCreated={setJustCreatedResult}
       />
     );
+=======
+  const handleCheck = () => {
+  const minHour = getVolunteerMin()
+  const errors = []
+
+  if (!age) {
+    errors.push('กรุณาตรวจสอบวันเดือนปีเกิดให้ถูกต้อง เช่น 12/08/2547')
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
   }
 
+  if (!gpax) {
+    errors.push('กรุณากรอกเกรดเฉลี่ยสะสม GPAX')
+  } else if (Number(gpax) < 1.8) {
+    errors.push('เกรดเฉลี่ยสะสมต้องไม่ต่ำกว่า 1.80')
+  }
+
+  if (!volunteerHours) {
+    errors.push('กรุณากรอกจำนวนชั่วโมงจิตอาสา')
+  } else if (Number(volunteerHours) < minHour) {
+    errors.push(`ชั่วโมงจิตอาสาต้องไม่น้อยกว่า ${minHour} ชั่วโมง`)
+  }
+
+  if (!gpaxFile) {
+    errors.push('กรุณาแนบไฟล์หลักฐาน GPAX')
+  }
+
+  if (!volunteerFile) {
+    errors.push('กรุณาแนบไฟล์หลักฐานชั่วโมงจิตอาสา')
+  }
+
+  const pass = errors.length === 0
+
+  setResult({
+    pass,
+    errors,
+    minHour,
+  })
+
+  if (!pass) {
+    return
+  }
+
+  const loanData = {
+    loanType,
+    loanTypeText: getLoanTypeText(),
+    gpax: Number(gpax),
+    volunteerHours: Number(volunteerHours),
+    age,
+    isAdult: age >= 20,
+    gpaxFile,
+    volunteerFile,
+  }
+
+  setLoanData(loanData)
+
+  const selectedStudent = JSON.parse(
+    localStorage.getItem('selectedMockStudent') || '{}'
+  )
+
+  const loanTypeCodeMap = {
+    new: 'NEW_BORROWER',
+    continue: 'CONTINUING_CURRENT',
+    transfer: 'CONTINUING_SPECIAL',
+  }
+
+  const updatedStudent = {
+    ...selectedStudent,
+    gpax: Number(gpax),
+    volunteerHours: Number(volunteerHours),
+    age,
+    loanType,
+    loanTypeCode: loanTypeCodeMap[loanType],
+    loanTypeName: getLoanTypeText(),
+    eligibilityStatus: 'ผ่าน',
+    applicationStatus: 'รออัปโหลดเอกสาร',
+    requiresParentDocuments: age < 20,
+    currentStep: 2,
+  }
+
+  localStorage.setItem(
+    'selectedMockStudent',
+    JSON.stringify(updatedStudent)
+  )
+
+  window.dispatchEvent(
+    new CustomEvent('mockStudentChanged', {
+      detail: updatedStudent,
+    })
+  )
+
+  setTimeout(() => {
+    setPage('uploadDocuments')
+  }, 700)
+}
+
+
+
   return (
+<<<<<<< HEAD
     <main className={PAGE_MAIN}>
       <section className={PAGE_WRAP}>
         <PageHeader
@@ -227,6 +324,15 @@ function Eligibility({ setPage }) {
             selectedStudent?.loanTypeName || "-",
           ]}
         />
+=======
+    <div className="min-h-screen bg-[#eef5ff] text-[#07116f]">
+
+      
+
+
+      <main className="max-w-5xl mx-auto px-8 py-8">
+        <p className="text-sm font-bold text-blue-500">ขั้นตอนที่ 2 จาก 2</p>
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
 
         {/* การ์ดสรุป 4 ใบ */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -370,8 +476,13 @@ function Eligibility({ setPage }) {
             <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-5 lg:px-8">
               <button
                 type="button"
+<<<<<<< HEAD
                 onClick={() => setPage("studentProfiles")}
                 className="h-12 rounded-xl border border-gray-200 bg-white px-6 text-base font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
+=======
+                onClick={() => setPage("studentInfo")}
+                className="h-14 sm:w-44 rounded-2xl bg-white border border-gray-200 text-gray-700 font-bold shadow-sm hover:bg-gray-50 hover:shadow-md transition-all"
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
               >
                 ← กลับ
               </button>

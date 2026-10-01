@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useEffect, useMemo, useState } from "react";
 import { requiresQualificationCheck } from "../../rules/documentRules";
 import { fetchStaffStudentList } from "../../services/api";
@@ -47,25 +48,59 @@ function StudentList({ setPage, openStudentReview }) {
     | ค้นหาและกรองข้อมูล (กรองฝั่ง client เพราะโหลดมาครั้งเดียวตอนเปิดหน้า)
     |--------------------------------------------------------------------------
     */
+=======
+import { useMemo, useState } from "react";
+import {
+    DOCUMENT_TYPES,
+    getBorrowerTypeLabel,
+    getDocumentCompletion,
+    normalizeStatus,
+    requiresQualificationCheck,
+} from "./documentRules";
+
+function StudentList({
+    students = [],
+    setPage,
+    openStudentReview,
+}) {
+    const [searchText, setSearchText] = useState("");
+    const [semesterFilter, setSemesterFilter] =
+        useState("ทั้งหมด");
+    const [borrowerFilter, setBorrowerFilter] =
+        useState("ทั้งหมด");
+    const [statusFilter, setStatusFilter] =
+        useState("ทั้งหมด");
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
 
     const filteredStudents = useMemo(() => {
         const keyword = searchText.trim().toLowerCase();
 
         return students.filter((student) => {
+<<<<<<< HEAD
             if (!student) return false;
 
+=======
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
             const searchable = [
                 student.studentId,
                 student.fullName,
                 student.faculty,
                 student.major,
+<<<<<<< HEAD
                 student.borrowerType,
                 student.borrowerCode,
+=======
+                getBorrowerTypeLabel(
+                    student.borrowerTypeCode,
+                    student.borrowerType
+                ),
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
             ]
                 .filter(Boolean)
                 .join(" ")
                 .toLowerCase();
 
+<<<<<<< HEAD
             const matchesSearch =
                 !keyword || searchable.includes(keyword);
 
@@ -89,6 +124,29 @@ function StudentList({ setPage, openStudentReview }) {
             );
         });
     }, [students, searchText, semesterFilter, borrowerFilter, statusFilter]);
+=======
+            return (
+                (!keyword ||
+                    searchable.includes(keyword)) &&
+                (semesterFilter === "ทั้งหมด" ||
+                    String(student.semester) ===
+                    semesterFilter) &&
+                (borrowerFilter === "ทั้งหมด" ||
+                    student.borrowerTypeCode ===
+                    borrowerFilter) &&
+                (statusFilter === "ทั้งหมด" ||
+                    normalizeStatus(student.status) ===
+                    statusFilter)
+            );
+        });
+    }, [
+        students,
+        searchText,
+        semesterFilter,
+        borrowerFilter,
+        statusFilter,
+    ]);
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
 
     const resetFilters = () => {
         setSearchText("");
@@ -97,6 +155,7 @@ function StudentList({ setPage, openStudentReview }) {
         setStatusFilter("ทั้งหมด");
     };
 
+<<<<<<< HEAD
     const handleOpenReview = (student) => {
         if (!student) {
             alert("ไม่พบข้อมูลนักศึกษา");
@@ -171,10 +230,53 @@ function StudentList({ setPage, openStudentReview }) {
                                 className="h-12 w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                             />
                         </div>
+=======
+    return (
+        <div className="min-h-screen bg-[#eef5ff] text-[#07116f]">
+            <header className="sticky top-0 z-40 border-b border-gray-100 bg-white shadow-sm">
+                <div className="flex min-h-20 items-center justify-between gap-4 px-5 sm:px-8 lg:px-10">
+                    <div>
+                        <p className="text-sm font-bold text-blue-500">
+                            PSU Smart Loan
+                        </p>
+                        <h1 className="mt-1 text-2xl font-black">
+                            รายชื่อนักศึกษา
+                        </h1>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setPage?.("staffDashboard")
+                        }
+                        className="rounded-xl border border-[#07116f] px-4 py-2.5 font-black"
+                    >
+                        ← กลับ Dashboard
+                    </button>
+                </div>
+            </header>
+
+            <main className="px-5 py-7 sm:px-8 lg:px-10">
+                <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
+                    <h2 className="text-xl font-black">
+                        ค้นหาและกรองข้อมูล
+                    </h2>
+
+                    <div className="mt-6 grid gap-4 xl:grid-cols-12">
+                        <input
+                            value={searchText}
+                            onChange={(event) =>
+                                setSearchText(event.target.value)
+                            }
+                            placeholder="ชื่อ รหัส คณะ หรือสาขา"
+                            className="rounded-xl border border-gray-200 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 xl:col-span-4"
+                        />
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
 
                         <select
                             value={semesterFilter}
                             onChange={(event) =>
+<<<<<<< HEAD
                                 setSemesterFilter(event.target.value)
                             }
                             className="h-12 rounded-xl border border-gray-200 bg-white px-4 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 xl:col-span-2"
@@ -182,17 +284,49 @@ function StudentList({ setPage, openStudentReview }) {
                             <option value="ทั้งหมด">ทุกภาคเรียน</option>
                             <option value="1">ภาคเรียนที่ 1</option>
                             <option value="2">ภาคเรียนที่ 2</option>
+=======
+                                setSemesterFilter(
+                                    event.target.value
+                                )
+                            }
+                            className="rounded-xl border border-gray-200 bg-white px-4 py-3 xl:col-span-2"
+                        >
+                            <option value="ทั้งหมด">
+                                ทุกภาคเรียน
+                            </option>
+                            <option value="1">
+                                ภาคเรียนที่ 1
+                            </option>
+                            <option value="2">
+                                ภาคเรียนที่ 2
+                            </option>
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                         </select>
 
                         <select
                             value={borrowerFilter}
                             onChange={(event) =>
+<<<<<<< HEAD
                                 setBorrowerFilter(event.target.value)
                             }
                             className="h-12 rounded-xl border border-gray-200 bg-white px-4 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 xl:col-span-3"
                         >
                             <option value="ทั้งหมด">ทุกประเภทผู้กู้</option>
                             <option value="NEW">ผู้กู้รายใหม่</option>
+=======
+                                setBorrowerFilter(
+                                    event.target.value
+                                )
+                            }
+                            className="rounded-xl border border-gray-200 bg-white px-4 py-3 xl:col-span-3"
+                        >
+                            <option value="ทั้งหมด">
+                                ทุกประเภทผู้กู้
+                            </option>
+                            <option value="NEW">
+                                ผู้กู้รายใหม่
+                            </option>
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                             <option value="CONTINUING_SPECIAL">
                                 ผู้กู้ต่อเนื่องกรณีพิเศษ
                             </option>
@@ -204,6 +338,7 @@ function StudentList({ setPage, openStudentReview }) {
                         <select
                             value={statusFilter}
                             onChange={(event) =>
+<<<<<<< HEAD
                                 setStatusFilter(event.target.value)
                             }
                             className="h-12 rounded-xl border border-gray-200 bg-white px-4 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 xl:col-span-2"
@@ -212,18 +347,43 @@ function StudentList({ setPage, openStudentReview }) {
                             <option value="รอตรวจสอบ">รอตรวจสอบ</option>
                             <option value="ต้องแก้ไข">ต้องแก้ไข</option>
                             <option value="ผ่าน">ผ่านแล้ว</option>
+=======
+                                setStatusFilter(
+                                    event.target.value
+                                )
+                            }
+                            className="rounded-xl border border-gray-200 bg-white px-4 py-3 xl:col-span-2"
+                        >
+                            <option value="ทั้งหมด">
+                                ทุกสถานะ
+                            </option>
+                            <option value="รอตรวจสอบ">
+                                รอตรวจสอบ
+                            </option>
+                            <option value="ต้องแก้ไข">
+                                ต้องแก้ไข
+                            </option>
+                            <option value="ผ่าน">
+                                ผ่านแล้ว
+                            </option>
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                         </select>
 
                         <button
                             type="button"
                             onClick={resetFilters}
+<<<<<<< HEAD
                             className="h-12 rounded-xl border border-gray-200 px-4 font-black text-gray-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 xl:col-span-1"
+=======
+                            className="rounded-xl border border-gray-200 px-4 py-3 font-bold xl:col-span-1"
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                         >
                             ล้าง
                         </button>
                     </div>
                 </section>
 
+<<<<<<< HEAD
                 <section className="mt-7 overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-sm">
                     <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                         <div>
@@ -301,11 +461,81 @@ function StudentList({ setPage, openStudentReview }) {
                                             const checkQualification =
                                                 requiresQualificationCheck(
                                                     student?.semester
+=======
+                <section className="mt-7 overflow-hidden rounded-3xl bg-white shadow-sm">
+                    <div className="border-b border-gray-100 px-5 py-5 sm:px-6">
+                        <h2 className="text-xl font-black">
+                            รายการนักศึกษา
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-500">
+                            พบข้อมูล {filteredStudents.length} รายการ
+                        </p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[1400px] text-left">
+                            <thead>
+                                <tr className="border-b border-gray-100 bg-gray-50 text-sm text-gray-500">
+                                    <th className="px-5 py-4">
+                                        นักศึกษา
+                                    </th>
+                                    <th className="px-5 py-4">
+                                        ภาคเรียน
+                                    </th>
+                                    <th className="px-5 py-4">
+                                        ประเภทผู้กู้
+                                    </th>
+                                    <th className="px-5 py-4 text-center">
+                                        อายุ
+                                    </th>
+                                    <th className="px-5 py-4 text-center">
+                                        GPAX
+                                    </th>
+                                    <th className="px-5 py-4 text-center">
+                                        จิตอาสา
+                                    </th>
+                                    <th className="px-5 py-4">
+                                        เอกสารที่ต้องใช้
+                                    </th>
+                                    <th className="px-5 py-4 text-center">
+                                        ความครบถ้วน
+                                    </th>
+                                    <th className="px-5 py-4">
+                                        สถานะ
+                                    </th>
+                                    <th className="px-5 py-4 text-center">
+                                        จัดการ
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {filteredStudents.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan="10"
+                                            className="px-5 py-16 text-center text-gray-500"
+                                        >
+                                            ไม่พบข้อมูลนักศึกษา
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredStudents.map(
+                                        (student) => {
+                                            const completion =
+                                                getDocumentCompletion(
+                                                    student
+                                                );
+                                            const checkQualification =
+                                                requiresQualificationCheck(
+                                                    student.semester
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                                 );
 
                                             return (
                                                 <tr
                                                     key={student.id}
+<<<<<<< HEAD
                                                     className="border-b border-gray-100 transition hover:bg-blue-50/50"
                                                 >
                                                     <td className="px-6 py-5">
@@ -384,6 +614,103 @@ function StudentList({ setPage, openStudentReview }) {
                                                     <td className="px-5 py-5 text-center">
                                                         <StatusBadge
                                                             status={student.status}
+=======
+                                                    className="border-b border-gray-100 hover:bg-blue-50/40"
+                                                >
+                                                    <td className="px-5 py-5">
+                                                        <p className="font-black">
+                                                            {student.fullName}
+                                                        </p>
+                                                        <p className="mt-1 text-sm text-gray-500">
+                                                            {student.studentId}
+                                                        </p>
+                                                        <p className="mt-1 text-xs text-gray-400">
+                                                            {student.faculty} ·{" "}
+                                                            {student.major}
+                                                        </p>
+                                                    </td>
+
+                                                    <td className="px-5 py-5 font-black">
+                                                        {student.semester}
+                                                    </td>
+
+                                                    <td className="px-5 py-5">
+                                                        <p className="font-black">
+                                                            {getBorrowerTypeLabel(
+                                                                student.borrowerTypeCode,
+                                                                student.borrowerType
+                                                            )}
+                                                        </p>
+                                                        <p className="mt-1 text-xs text-gray-400">
+                                                            {
+                                                                student.borrowerTypeCode
+                                                            }
+                                                        </p>
+                                                    </td>
+
+                                                    <td className="px-5 py-5 text-center font-black">
+                                                        {student.age}
+                                                    </td>
+
+                                                    <td className="px-5 py-5 text-center font-black">
+                                                        {checkQualification
+                                                            ? student.gpax ?? "-"
+                                                            : "ไม่ตรวจ"}
+                                                    </td>
+
+                                                    <td className="px-5 py-5 text-center font-black">
+                                                        {checkQualification
+                                                            ? `${student.volunteerHours ??
+                                                            "-"
+                                                            } ชม.`
+                                                            : "ไม่ตรวจ"}
+                                                    </td>
+
+                                                    <td className="px-5 py-5">
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {completion.required.map(
+                                                                (category) => (
+                                                                    <span
+                                                                        key={category}
+                                                                        className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700"
+                                                                    >
+                                                                        {
+                                                                            DOCUMENT_TYPES[
+                                                                            category
+                                                                            ]
+                                                                        }
+                                                                    </span>
+                                                                )
+                                                            )}
+                                                        </div>
+                                                    </td>
+
+                                                    <td className="px-5 py-5 text-center">
+                                                        <span
+                                                            className={`rounded-full px-3 py-1.5 text-xs font-black ${completion.missing
+                                                                .length === 0
+                                                                ? "bg-green-100 text-green-700"
+                                                                : "bg-red-100 text-red-700"
+                                                                }`}
+                                                        >
+                                                            {
+                                                                completion.completed
+                                                            }
+                                                            /
+                                                            {
+                                                                completion.required
+                                                                    .length
+                                                            }{" "}
+                                                            ไฟล์
+                                                        </span>
+                                                    </td>
+
+                                                    <td className="px-5 py-5">
+                                                        <StatusBadge
+                                                            status={
+                                                                student.status
+                                                            }
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                                         />
                                                     </td>
 
@@ -391,16 +718,27 @@ function StudentList({ setPage, openStudentReview }) {
                                                         <button
                                                             type="button"
                                                             onClick={() =>
+<<<<<<< HEAD
                                                                 handleOpenReview(student)
                                                             }
                                                             className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#07116f] px-5 py-2.5 font-black text-white transition hover:bg-blue-800 active:scale-95"
                                                         >
                                                             <span>ตรวจสอบ</span>
                                                             <span>→</span>
+=======
+                                                                openStudentReview?.(
+                                                                    student
+                                                                )
+                                                            }
+                                                            className="rounded-xl bg-[#07116f] px-5 py-2.5 font-black text-white"
+                                                        >
+                                                            ตรวจสอบ
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                                         </button>
                                                     </td>
                                                 </tr>
                                             );
+<<<<<<< HEAD
                                         })
                                     )}
                                 </tbody>
@@ -424,11 +762,40 @@ function getStudentInitial(fullName) {
 function ValueBadge({ value }) {
     return (
         <span className="inline-flex min-w-[72px] justify-center rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
+=======
+                                        }
+                                    )
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+        </div>
+    );
+}
+
+function StatusBadge({ status }) {
+    const value = normalizeStatus(status);
+
+    const styles = {
+        ผ่าน: "bg-green-100 text-green-700",
+        ต้องแก้ไข: "bg-red-100 text-red-700",
+        รอตรวจสอบ:
+            "bg-yellow-100 text-yellow-700",
+    };
+
+    return (
+        <span
+            className={`rounded-full px-3 py-1.5 text-xs font-black ${styles[value]}`}
+        >
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
             {value}
         </span>
     );
 }
 
+<<<<<<< HEAD
 function NotRequiredBadge() {
     return (
         <span className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-500">
@@ -471,3 +838,6 @@ function StatusBadge({ status }) {
 }
 
 export default StudentList;
+=======
+export default StudentList;
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import {
@@ -95,15 +96,83 @@ function DocumentReview({ student, setPage, onSave }) {
         setHistory(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeRow?.requirementId]);
+=======
+import { useMemo, useState } from "react";
+import {
+    DOCUMENT_TYPES,
+    getBorrowerTypeLabel,
+    getDocumentByCategory,
+    getRequiredDocumentCategories,
+    normalizeStatus,
+    requiresQualificationCheck,
+} from "./documentRules";
+
+function DocumentReview({
+    student,
+    setPage,
+    onSave,
+}) {
+    const requiredCategories =
+        getRequiredDocumentCategories(student);
+
+    const [documents, setDocuments] = useState(
+        student?.documents?.map((document) => ({
+            ...document,
+            status:
+                document.status || "รอตรวจสอบ",
+            remark: document.remark || "",
+        })) || []
+    );
+
+    const firstRequiredDocument =
+        requiredCategories
+            .map((category) =>
+                getDocumentByCategory(
+                    documents,
+                    category
+                )
+            )
+            .find(Boolean);
+
+    const [activeDocumentId, setActiveDocumentId] =
+        useState(firstRequiredDocument?.id || null);
+
+    const activeDocument = useMemo(
+        () =>
+            documents.find(
+                (document) =>
+                    document.id === activeDocumentId
+            ),
+        [documents, activeDocumentId]
+    );
+
+    const requiredRows = useMemo(
+        () =>
+            requiredCategories.map((category) => ({
+                category,
+                name: DOCUMENT_TYPES[category],
+                document: getDocumentByCategory(
+                    documents,
+                    category
+                ),
+            })),
+        [documents, requiredCategories]
+    );
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
 
     const summary = useMemo(() => {
         return requiredRows.reduce(
             (result, row) => {
+<<<<<<< HEAD
                 if (!row.id) {
+=======
+                if (!row.document) {
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                     result.missing += 1;
                     return result;
                 }
 
+<<<<<<< HEAD
                 // เอกสารหลักฐาน GPAX/ชั่วโมงจิตอาสา ไม่ต้องนับรวมในตัวเลข
                 // สรุปตรวจสอบ เพราะระบบตัดสินอัตโนมัติไปแล้ว ไม่ใช่รายการ
                 // ที่ "รอเจ้าหน้าที่ตรวจ" จริงๆ
@@ -117,6 +186,15 @@ function DocumentReview({ student, setPage, onSave }) {
                 if (row.status === "APPROVED") {
                     result.approved += 1;
                 } else if (row.status === "REVISION_REQUIRED") {
+=======
+                const status = normalizeStatus(
+                    row.document.status
+                );
+
+                if (status === "ผ่าน") {
+                    result.approved += 1;
+                } else if (status === "ต้องแก้ไข") {
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                     result.rejected += 1;
                 } else {
                     result.pending += 1;
@@ -124,6 +202,7 @@ function DocumentReview({ student, setPage, onSave }) {
 
                 return result;
             },
+<<<<<<< HEAD
             { approved: 0, rejected: 0, pending: 0, missing: 0 }
         );
     }, [requiredRows]);
@@ -145,11 +224,53 @@ function DocumentReview({ student, setPage, onSave }) {
 
         if (statusLabel === "ต้องแก้ไข" && !noteDraft.trim()) {
             setActionError(
+=======
+            {
+                approved: 0,
+                rejected: 0,
+                pending: 0,
+                missing: 0,
+            }
+        );
+    }, [requiredRows]);
+
+    const updateDocument = (
+        documentId,
+        updates
+    ) => {
+        setDocuments((currentDocuments) =>
+            currentDocuments.map((document) =>
+                document.id === documentId
+                    ? {
+                        ...document,
+                        ...updates,
+                    }
+                    : document
+            )
+        );
+    };
+
+    const handleApprove = () => {
+        if (!activeDocument) return;
+
+        updateDocument(activeDocument.id, {
+            status: "ผ่าน",
+            remark: "",
+        });
+    };
+
+    const handleReject = () => {
+        if (!activeDocument) return;
+
+        if (!activeDocument.remark.trim()) {
+            alert(
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                 "กรุณาระบุหมายเหตุที่ต้องการให้นักศึกษาแก้ไข"
             );
             return;
         }
 
+<<<<<<< HEAD
         const parsedStaffId = validateStaffId();
         if (!parsedStaffId) return;
 
@@ -232,6 +353,33 @@ function DocumentReview({ student, setPage, onSave }) {
             </div>
         );
     }
+=======
+        updateDocument(activeDocument.id, {
+            status: "ต้องแก้ไข",
+        });
+    };
+
+    const handleSave = () => {
+        const updatedStudent = {
+            ...student,
+            documents,
+            status:
+                summary.missing > 0 ||
+                    summary.rejected > 0
+                    ? "ต้องแก้ไข"
+                    : summary.pending > 0
+                        ? "รอตรวจสอบ"
+                        : "ผ่าน",
+        };
+
+        onSave?.(updatedStudent);
+    };
+
+    const checkQualification =
+        requiresQualificationCheck(
+            student?.semester
+        );
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
 
     return (
         <div className="min-h-screen bg-[#eef5ff] text-[#07116f]">
@@ -246,6 +394,7 @@ function DocumentReview({ student, setPage, onSave }) {
                         </h1>
                     </div>
 
+<<<<<<< HEAD
                     <div className="flex items-center gap-3">
                         <div className="rounded-xl border border-gray-200 px-3 py-2 text-sm">
                             <span className="mr-2 font-bold text-gray-500">
@@ -264,6 +413,17 @@ function DocumentReview({ student, setPage, onSave }) {
                             ← กลับรายชื่อนักศึกษา
                         </button>
                     </div>
+=======
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setPage?.("studentList")
+                        }
+                        className="rounded-xl border border-[#07116f] px-4 py-2.5 font-black"
+                    >
+                        ← กลับรายชื่อนักศึกษา
+                    </button>
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                 </div>
             </header>
 
@@ -275,38 +435,75 @@ function DocumentReview({ student, setPage, onSave }) {
                                 ข้อมูลนักศึกษา
                             </p>
                             <h2 className="mt-2 text-2xl font-black">
+<<<<<<< HEAD
                                 {detail?.fullName || student?.fullName || "-"}
                             </h2>
                             <p className="mt-2 text-gray-500">
                                 รหัสนักศึกษา{" "}
                                 {detail?.studentId || student?.studentId || "-"}
+=======
+                                {student?.fullName || "-"}
+                            </h2>
+                            <p className="mt-2 text-gray-500">
+                                รหัสนักศึกษา{" "}
+                                {student?.studentId || "-"}
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                             </p>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
                             <InfoBadge
+<<<<<<< HEAD
                                 label={`ภาคเรียนที่ ${detail?.semester || "-"
+=======
+                                label={`ภาคเรียนที่ ${student?.semester || "-"
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                     }`}
                             />
                             <InfoBadge
                                 label={getBorrowerTypeLabel(
+<<<<<<< HEAD
                                     detail?.borrowerCode || detail?.borrowerType
                                 )}
                             />
                             <InfoBadge
                                 label={`อายุ ${detail?.age ?? "-"} ปี`}
+=======
+                                    student?.borrowerTypeCode,
+                                    student?.borrowerType
+                                )}
+                            />
+                            <InfoBadge
+                                label={`อายุ ${student?.age ?? "-"
+                                    } ปี`}
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                             />
                         </div>
                     </div>
 
                     <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+<<<<<<< HEAD
                         <InfoCard label="คณะ" value={detail?.faculty || "-"} />
                         <InfoCard label="สาขา" value={detail?.major || "-"} />
+=======
+                        <InfoCard
+                            label="คณะ"
+                            value={student?.faculty || "-"}
+                        />
+                        <InfoCard
+                            label="สาขา"
+                            value={student?.major || "-"}
+                        />
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                         <InfoCard
                             label="GPAX"
                             value={
                                 checkQualification
+<<<<<<< HEAD
                                     ? detail?.gpax ?? "-"
+=======
+                                    ? student?.gpax ?? "-"
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                     : "ภาคเรียนนี้ไม่ตรวจ"
                             }
                         />
@@ -314,13 +511,23 @@ function DocumentReview({ student, setPage, onSave }) {
                             label="ชั่วโมงจิตอาสา"
                             value={
                                 checkQualification
+<<<<<<< HEAD
                                     ? `${detail?.volunteerHours ?? "-"} ชั่วโมง`
+=======
+                                    ? `${student?.volunteerHours ??
+                                    "-"
+                                    } ชั่วโมง`
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                     : "ภาคเรียนนี้ไม่ตรวจ"
                             }
                         />
                     </div>
 
+<<<<<<< HEAD
                     {detail?.age < 20 && (
+=======
+                    {student?.age < 20 && (
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                         <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-orange-800">
                             <p className="font-black">
                                 นักศึกษาอายุไม่ครบ 20 ปีบริบูรณ์
@@ -330,6 +537,20 @@ function DocumentReview({ student, setPage, onSave }) {
                             </p>
                         </div>
                     )}
+<<<<<<< HEAD
+=======
+
+                    {Number(student?.semester) === 2 && (
+                        <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-800">
+                            <p className="font-black">
+                                ภาคเรียนที่ 2
+                            </p>
+                            <p className="mt-1 text-sm">
+                                ไม่ตรวจ GPAX และชั่วโมงจิตอาสา ตรวจเฉพาะใบเบิกเงินและสำเนาบัตรประจำตัวประชาชนผู้กู้ รวมเอกสารผู้ปกครองเมื่ออายุไม่ครบ 20 ปี
+                            </p>
+                        </div>
+                    )}
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                 </section>
 
                 <section className="mt-6 grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
@@ -338,13 +559,18 @@ function DocumentReview({ student, setPage, onSave }) {
                             เอกสารที่ต้องตรวจ
                         </h2>
                         <p className="mt-1 text-sm text-gray-500">
+<<<<<<< HEAD
                             ดึงตรงจากฐานข้อมูล (document_requirements) ตามภาคเรียน
                             ประเภทผู้กู้ และอายุ
+=======
+                            ระบบคำนวณตามภาคเรียน ประเภทผู้กู้ และอายุ
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                         </p>
 
                         <div className="mt-5 space-y-3">
                             {requiredRows.map((row) => (
                                 <button
+<<<<<<< HEAD
                                     key={row.requirementId}
                                     type="button"
                                     onClick={() =>
@@ -356,6 +582,21 @@ function DocumentReview({ student, setPage, onSave }) {
                                             ? "border-red-200 bg-red-50"
                                             : activeRequirementId ===
                                                 row.requirementId
+=======
+                                    key={row.category}
+                                    type="button"
+                                    disabled={!row.document}
+                                    onClick={() =>
+                                        row.document &&
+                                        setActiveDocumentId(
+                                            row.document.id
+                                        )
+                                    }
+                                    className={`w-full rounded-2xl border p-4 text-left ${!row.document
+                                            ? "cursor-not-allowed border-red-200 bg-red-50"
+                                            : activeDocument?.id ===
+                                                row.document.id
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                                 ? "border-[#07116f] bg-blue-50"
                                                 : "border-gray-100 hover:bg-blue-50/40"
                                         }`}
@@ -363,6 +604,7 @@ function DocumentReview({ student, setPage, onSave }) {
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
                                             <p className="font-black">
+<<<<<<< HEAD
                                                 {row.documentType}
                                             </p>
                                             <p className="mt-1 text-sm text-gray-500">
@@ -381,6 +623,22 @@ function DocumentReview({ student, setPage, onSave }) {
                                                 row.documentCode === "VOLUNTEER_EVIDENCE" ? null : (
                                                 <StatusBadge status={row.status} />
                                             )
+=======
+                                                {row.name}
+                                            </p>
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                {row.document?.fileName ||
+                                                    "ยังไม่ได้อัปโหลด"}
+                                            </p>
+                                        </div>
+
+                                        {row.document ? (
+                                            <StatusBadge
+                                                status={
+                                                    row.document.status
+                                                }
+                                            />
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                         ) : (
                                             <span className="rounded-full bg-red-100 px-3 py-1.5 text-xs font-black text-red-700">
                                                 ขาดเอกสาร
@@ -393,7 +651,11 @@ function DocumentReview({ student, setPage, onSave }) {
                     </div>
 
                     <div className="rounded-3xl bg-white p-6 shadow-sm">
+<<<<<<< HEAD
                         {activeRow?.id ? (
+=======
+                        {activeDocument ? (
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                             <>
                                 <div className="flex flex-col gap-4 border-b border-gray-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
@@ -401,6 +663,7 @@ function DocumentReview({ student, setPage, onSave }) {
                                             เอกสารที่กำลังตรวจ
                                         </p>
                                         <h2 className="mt-2 text-2xl font-black">
+<<<<<<< HEAD
                                             {activeRow.documentType}
                                         </h2>
                                         <p className="mt-2 text-sm text-gray-500">
@@ -559,6 +822,117 @@ function DocumentReview({ student, setPage, onSave }) {
                                         {activeRow
                                             ? "นักศึกษายังไม่ได้อัปโหลดเอกสารนี้"
                                             : "กรุณาเลือกเอกสารที่ต้องการตรวจ"}
+=======
+                                            {activeDocument.name}
+                                        </h2>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            {
+                                                activeDocument.fileName
+                                            }
+                                        </p>
+                                    </div>
+
+                                    <StatusBadge
+                                        status={
+                                            activeDocument.status
+                                        }
+                                    />
+                                </div>
+
+                                <div className="mt-6 flex min-h-[420px] items-center justify-center rounded-3xl border-2 border-dashed border-blue-100 bg-[#f8fbff] p-8 text-center">
+                                    <div>
+                                        <div className="text-7xl">
+                                            📑
+                                        </div>
+                                        <p className="mt-5 text-lg font-black">
+                                            พื้นที่แสดงตัวอย่างเอกสาร
+                                        </p>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            เมื่อเชื่อม Backend แล้วให้ใส่ URL ไฟล์จริงในส่วนนี้
+                                        </p>
+
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                alert(
+                                                    `เปิดไฟล์: ${activeDocument.fileName}`
+                                                )
+                                            }
+                                            className="mt-5 rounded-xl border border-[#07116f] px-5 py-3 font-black"
+                                        >
+                                            เปิดดูไฟล์
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6">
+                                    <label className="mb-2 block font-black">
+                                        หมายเหตุสำหรับนักศึกษา
+                                    </label>
+
+                                    <textarea
+                                        rows="4"
+                                        value={
+                                            activeDocument.remark
+                                        }
+                                        onChange={(event) =>
+                                            updateDocument(
+                                                activeDocument.id,
+                                                {
+                                                    remark:
+                                                        event.target.value,
+                                                }
+                                            )
+                                        }
+                                        placeholder="เช่น ภาพไม่ชัด เอกสารไม่ครบ หรือลายเซ็นไม่ครบ"
+                                        className="w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                    />
+                                </div>
+
+                                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                                    <button
+                                        type="button"
+                                        onClick={handleApprove}
+                                        className="rounded-xl bg-green-600 px-5 py-3 font-black text-white"
+                                    >
+                                        ✓ ผ่าน
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleReject}
+                                        className="rounded-xl bg-red-600 px-5 py-3 font-black text-white"
+                                    >
+                                        ✕ ต้องแก้ไข
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            updateDocument(
+                                                activeDocument.id,
+                                                {
+                                                    status:
+                                                        "รอตรวจสอบ",
+                                                    remark: "",
+                                                }
+                                            )
+                                        }
+                                        className="rounded-xl border border-gray-200 px-5 py-3 font-black text-gray-600"
+                                    >
+                                        รีเซ็ตผล
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex min-h-[600px] items-center justify-center text-center">
+                                <div>
+                                    <div className="text-6xl">
+                                        📭
+                                    </div>
+                                    <p className="mt-4 text-lg font-black text-gray-600">
+                                        กรุณาเลือกเอกสารที่มีไฟล์
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                                     </p>
                                 </div>
                             </div>
@@ -567,13 +941,44 @@ function DocumentReview({ student, setPage, onSave }) {
                 </section>
 
                 <section className="mt-6 rounded-3xl bg-white p-6 shadow-sm">
+<<<<<<< HEAD
                     <div className="flex justify-end">
+=======
+                    <div className="grid gap-3 sm:grid-cols-4">
+                        <SummaryBox
+                            label="ผ่าน"
+                            value={summary.approved}
+                            className="bg-green-50 text-green-700"
+                        />
+                        <SummaryBox
+                            label="ต้องแก้ไข"
+                            value={summary.rejected}
+                            className="bg-red-50 text-red-700"
+                        />
+                        <SummaryBox
+                            label="รอตรวจ"
+                            value={summary.pending}
+                            className="bg-yellow-50 text-yellow-700"
+                        />
+                        <SummaryBox
+                            label="ขาดเอกสาร"
+                            value={summary.missing}
+                            className="bg-gray-100 text-gray-700"
+                        />
+                    </div>
+
+                    <div className="mt-6 flex justify-end border-t border-gray-100 pt-5">
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                         <button
                             type="button"
                             onClick={handleSave}
                             className="rounded-xl bg-[#07116f] px-7 py-3 font-black text-white"
                         >
+<<<<<<< HEAD
                             บันทึก
+=======
+                            บันทึกผลการตรวจสอบ
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
                         </button>
                     </div>
                 </section>
@@ -593,40 +998,81 @@ function InfoBadge({ label }) {
 function InfoCard({ label, value }) {
     return (
         <div className="rounded-2xl bg-gray-50 p-4">
+<<<<<<< HEAD
             <p className="text-sm text-gray-400">{label}</p>
             <p className="mt-1 font-black">{value}</p>
+=======
+            <p className="text-sm text-gray-400">
+                {label}
+            </p>
+            <p className="mt-1 font-black">
+                {value}
+            </p>
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
         </div>
     );
 }
 
+<<<<<<< HEAD
 function SummaryBox({ label, value, className }) {
     return (
         <div className={`rounded-2xl p-4 text-center ${className}`}>
             <p className="text-2xl font-black">{value}</p>
             <p className="mt-1 text-sm font-bold">{label}</p>
+=======
+function SummaryBox({
+    label,
+    value,
+    className,
+}) {
+    return (
+        <div
+            className={`rounded-2xl p-4 text-center ${className}`}
+        >
+            <p className="text-2xl font-black">
+                {value}
+            </p>
+            <p className="mt-1 text-sm font-bold">
+                {label}
+            </p>
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
         </div>
     );
 }
 
 function StatusBadge({ status }) {
+<<<<<<< HEAD
     const value = mapBackendStatusToLabel(status);
+=======
+    const value = normalizeStatus(status);
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
 
     const styles = {
         ผ่าน: "bg-green-100 text-green-700",
         ต้องแก้ไข: "bg-red-100 text-red-700",
+<<<<<<< HEAD
         รอตรวจสอบ: "bg-yellow-100 text-yellow-700",
+=======
+        รอตรวจสอบ:
+            "bg-yellow-100 text-yellow-700",
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
     };
 
     return (
         <span
+<<<<<<< HEAD
             className={`inline-flex rounded-full px-3 py-1.5 text-xs font-black ${styles[value] || "bg-gray-100 text-gray-700"
                 }`}
+=======
+            className={`inline-flex rounded-full px-3 py-1.5 text-xs font-black ${styles[value]}`}
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
         >
             {value}
         </span>
     );
 }
 
+<<<<<<< HEAD
 function DocumentPreview({ filePath, mimeType }) {
     const baseUrl =
         import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
@@ -683,3 +1129,6 @@ function DocumentPreview({ filePath, mimeType }) {
 }
 
 export default DocumentReview;
+=======
+export default DocumentReview;
+>>>>>>> 48a7d434ce692b2dcfb0093176389538de32d049
