@@ -6,6 +6,9 @@ import {
 } from "../rules/documentRules";
 import { uploadStudentDocument } from "../services/api";
 
+// ไม่รวม GPAX_EVIDENCE / VOLUNTEER_EVIDENCE เพราะอัปโหลดไปแล้วตั้งแต่หน้า "คัดกรองคุณสมบัติ"
+const PRESCREEN_CATEGORIES = ["GPAX_EVIDENCE", "VOLUNTEER_EVIDENCE"];
+
 function UploadDocuments({ setPage }) {
   const {
     selectedStudent,
@@ -21,15 +24,7 @@ function UploadDocuments({ setPage }) {
   // เอกสารที่ต้องมีช่อง "อัปโหลด" ในหน้านี้ มี 2 กรณี:
   //   1) ยังไม่เคยอัปโหลดเลย (ไม่มี documentId)
   //   2) เคยอัปโหลดแล้วแต่เจ้าหน้าที่ตีกลับ (status === REVISION_REQUIRED)
-  //      ต้องเปิดให้แก้ไข/อัปโหลดใหม่ทับได้
-  // ส่วนที่ "ผ่าน" หรือ "รอตรวจสอบ" (เจ้าหน้าที่ยังไม่ตัดสิน) ยังคงล็อกไว้
-  // ไม่ให้แก้พร่ำเพรื่อระหว่างรอผลตรวจ — ใช้ requirementId จริงจาก backend
-  // เสมอ เพื่อให้ requirementId ที่ส่งไป POST ตรงกับที่ backend คาดหวัง
-  //
-  // ไม่รวม GPAX_EVIDENCE / VOLUNTEER_EVIDENCE เพราะสองรายการนี้อัปโหลดไป
-  // แล้วตั้งแต่หน้า "คัดกรองคุณสมบัติ" (Eligibility) ไม่ต้องให้อัปโหลดซ้ำ
-  const PRESCREEN_CATEGORIES = ["GPAX_EVIDENCE", "VOLUNTEER_EVIDENCE"];
-
+  // ส่วนที่ "ผ่าน" หรือ "รอตรวจสอบ" ยังคงล็อกไว้ — ใช้ requirementId จริงจาก backend เสมอ
   const pendingRequirements = useMemo(() => {
     return (selectedStudent?.requiredDocuments || [])
       .filter(
@@ -89,11 +84,7 @@ function UploadDocuments({ setPage }) {
     setMessageType("");
   };
 
-  // ฟังก์ชันภายในสำหรับอัปโหลดทีละไฟล์ — เรียกจาก handleSubmitAll เท่านั้น
-  // (ไม่มีปุ่มอัปโหลดแยกรายไฟล์แล้ว ต้องเลือกไฟล์ให้ครบทุกช่องก่อน
-  // ถึงจะกดปุ่ม "ส่งทั้งหมด" ได้ ตามที่ต้องการให้เอกสารส่งถึงมือ
-  // เจ้าหน้าที่ครบชุดเสมอ ส่วนความถูกต้องของแต่ละไฟล์ค่อยให้เจ้าหน้าที่
-  // ตรวจทีหลังตามปกติ)
+  // อัปโหลดทีละไฟล์ — เรียกจาก handleSubmitAll เท่านั้น
   const uploadOneFile = async (requirementId) => {
     const file = files[requirementId];
 
@@ -127,8 +118,7 @@ function UploadDocuments({ setPage }) {
       return;
     }
 
-    // บังคับว่าต้องเลือกไฟล์ครบทุกช่องก่อน ถึงจะกดส่งได้ (ตามที่ต้องการให้
-    // เอกสารชุดที่ส่งถึงเจ้าหน้าที่ครบสมบูรณ์เสมอ ไม่ใช่ส่งแค่บางไฟล์)
+    // ต้องเลือกไฟล์ครบทุกช่องก่อน ถึงจะกดส่งได้
     if (!allSelected) {
       setMessage(
         `กรุณาเลือกไฟล์ให้ครบทุกรายการก่อนส่ง (ตอนนี้เลือกแล้ว ${selectedCount}/${required.length})`
@@ -161,7 +151,7 @@ function UploadDocuments({ setPage }) {
         if (setPage) setPage("status");
       }, 800);
     } else {
-      // ลบเฉพาะไฟล์ที่อัปโหลดสำเร็จออกจาก state เหลือแค่ที่พังไว้ให้แก้/ลองใหม่
+      // ลบเฉพาะไฟล์ที่อัปโหลดสำเร็จออกจาก state เหลือแค่ที่พังไว้ให้ลองใหม่
       setFiles((current) => {
         const updated = { ...current };
         results
@@ -182,32 +172,32 @@ function UploadDocuments({ setPage }) {
   };
 
   return (
-    <main className="h-full w-full overflow-y-auto px-4 py-4 lg:px-6">
-      <section className="mx-auto flex max-w-5xl flex-col gap-3">
-        {/* Header แบบบางเรียว */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-5 py-3 text-white shadow-md">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg">
+    <main className="w-full px-4 py-6 sm:px-6 lg:px-10 2xl:px-14">
+      <section className="mx-auto flex w-full max-w-[1440px] flex-col gap-5">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-6 py-6 text-white shadow-md lg:px-8">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-3xl ring-1 ring-white/20">
               📂
             </div>
             <div>
-              <h1 className="text-base font-black leading-tight">
+              <h1 className="text-2xl font-black leading-tight md:text-3xl">
                 เอกสารของฉัน
               </h1>
-              <p className="text-xs leading-tight text-blue-100">
+              <p className="mt-1 text-base text-blue-100">
                 {selectedStudent?.fullName || "ไม่พบชื่อนักศึกษา"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-bold">
-            <span className="rounded-full bg-white/15 px-3 py-1.5">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+            <span className="rounded-full bg-white/15 px-4 py-2">
               ต้องส่ง {required.length}
             </span>
-            <span className="rounded-full bg-white/15 px-3 py-1.5">
+            <span className="rounded-full bg-white/15 px-4 py-2">
               ส่งแล้ว {uploadedDocuments.length}
             </span>
-            <span className="rounded-full bg-white/25 px-3 py-1.5">
+            <span className="rounded-full bg-white/25 px-4 py-2">
               เลือกแล้ว {progress}
             </span>
           </div>
@@ -215,14 +205,14 @@ function UploadDocuments({ setPage }) {
 
         {/* แถบความคืบหน้า */}
         {required.length > 0 && (
-          <div className="rounded-xl bg-white px-4 py-2.5 shadow-sm">
-            <div className="mb-1.5 flex items-center justify-between text-xs">
+          <div className="rounded-2xl bg-white px-6 py-4 shadow-sm lg:px-8">
+            <div className="mb-2 flex items-center justify-between text-sm">
               <span className="font-bold text-gray-500">
                 เลือกไฟล์ให้ครบก่อนถึงจะส่งได้
               </span>
-              <span className="font-black text-blue-600">{progress}</span>
+              <span className="text-base font-black text-blue-600">{progress}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-blue-100">
+            <div className="h-2.5 overflow-hidden rounded-full bg-blue-100">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-[#07116f] to-[#0646ff] transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
@@ -233,14 +223,14 @@ function UploadDocuments({ setPage }) {
 
         {/* รายการเอกสารที่ต้องอัปโหลด — แบบลิสต์เลขลำดับ เส้นประนำสายตา */}
         {required.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-6 text-center">
-            <p className="text-2xl">🎉</p>
-            <p className="mt-1 text-sm font-black text-gray-600">
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
+            <p className="text-3xl">🎉</p>
+            <p className="mt-2 text-lg font-black text-gray-600">
               ส่งเอกสารครบทุกรายการแล้ว
             </p>
           </div>
         ) : (
-          <div className="flex flex-col rounded-xl bg-white px-4 py-1 shadow-sm">
+          <div className="flex flex-col rounded-2xl bg-white px-6 py-2 shadow-sm lg:px-8">
             {required.map((item, index) => (
               <ListUploadRow
                 key={item.requirementId}
@@ -261,29 +251,32 @@ function UploadDocuments({ setPage }) {
           </div>
         )}
 
-        {/* เอกสารที่ส่งแล้ว — แถวกระชับ */}
+        {/* เอกสารที่ส่งแล้ว */}
         {uploadedDocuments.length > 0 && (
-          <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-            <div className="bg-[#eef5ff] px-4 py-2">
-              <h2 className="text-sm font-black text-[#07116f]">
+          <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+            <div className="bg-[#eef5ff] px-6 py-3 lg:px-8">
+              <h2 className="text-base font-black text-[#07116f]">
                 เอกสารที่ส่งแล้ว
               </h2>
             </div>
-            <div className="max-h-40 divide-y divide-gray-100 overflow-y-auto">
+            <div className="max-h-64 divide-y divide-gray-100 overflow-y-auto">
               {uploadedDocuments.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between gap-3 px-4 py-2"
+                  className="flex items-center justify-between gap-3 px-6 py-3 lg:px-8"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-[#07116f]">
+                    <p className="truncate text-base font-bold text-[#07116f]">
                       {doc.name}
                     </p>
-                    <p className="truncate text-xs text-gray-400">
+                    <p className="truncate text-sm text-gray-400">
                       {doc.fileName}
                     </p>
                   </div>
-                  <StatusPill status={doc.status} />
+                  {/* หลักฐาน GPAX / จิตอาสา คัดกรองมาแล้วตอนกรอก ไม่ต้องแสดงสถานะ */}
+                  {!PRESCREEN_CATEGORIES.includes(doc.category) && (
+                    <StatusPill status={doc.status} />
+                  )}
                 </div>
               ))}
             </div>
@@ -292,10 +285,11 @@ function UploadDocuments({ setPage }) {
 
         {message && (
           <div
-            className={`rounded-xl border px-4 py-2.5 text-xs font-bold ${messageType === "success"
+            className={`rounded-xl border px-5 py-3 text-base font-bold ${
+              messageType === "success"
                 ? "border-green-200 bg-green-50 text-green-700"
                 : "border-red-200 bg-red-50 text-red-700"
-              }`}
+            }`}
           >
             {message}
           </div>
@@ -306,7 +300,7 @@ function UploadDocuments({ setPage }) {
           <button
             type="button"
             onClick={() => setPage?.("eligibility")}
-            className="h-11 rounded-xl border border-gray-200 bg-white px-5 text-sm font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
+            className="h-12 rounded-xl border border-gray-200 bg-white px-6 text-base font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
           >
             ← กลับ
           </button>
@@ -315,7 +309,7 @@ function UploadDocuments({ setPage }) {
             type="button"
             onClick={handleSubmitAll}
             disabled={!allSelected || submitting}
-            className="h-11 flex-1 max-w-xs rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-6 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-12 max-w-sm flex-1 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 text-base font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting
               ? "กำลังส่ง..."
@@ -338,8 +332,9 @@ function StatusPill({ status }) {
 
   return (
     <span
-      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${styles[status] || "bg-gray-100 text-gray-700"
-        }`}
+      className={`shrink-0 rounded-full px-3 py-1 text-sm font-black ${
+        styles[status] || "bg-gray-100 text-gray-700"
+      }`}
     >
       {status}
     </span>
@@ -362,29 +357,31 @@ function ListUploadRow({
 
   return (
     <div
-      className={`my-1.5 flex items-center gap-2 rounded-lg py-2.5 ${needsFix
-          ? "border-2 border-red-300 bg-red-50/60 px-3"
-          : "border-b border-gray-100 px-1"
-        }`}
+      className={`my-2 flex items-center gap-3 rounded-xl py-4 ${
+        needsFix
+          ? "border-2 border-red-300 bg-red-50/60 px-4"
+          : "border-b border-gray-100 px-1 last:border-b-0"
+      }`}
     >
       {/* เลขลำดับ */}
       <span
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${file
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+          file
             ? "bg-green-100 text-green-700"
             : isReupload
               ? "bg-red-100 text-red-700"
               : "bg-blue-100 text-blue-700"
-          }`}
+        }`}
       >
         {file ? "✓" : isReupload ? "!" : number}
       </span>
 
       {/* ชื่อเอกสาร */}
-      <span className="shrink-0 max-w-[45%] truncate text-sm font-bold text-[#07116f]">
+      <span className="max-w-[45%] shrink-0 truncate text-base font-bold text-[#07116f]">
         {title}
         {needsFix && (
           <span
-            className="ml-1.5 rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-black text-red-800"
+            className="ml-2 rounded-full bg-red-200 px-2.5 py-0.5 text-xs font-black text-red-800"
             title={rejectReason}
           >
             ต้องแก้ไข
@@ -394,8 +391,9 @@ function ListUploadRow({
 
       {/* เส้นประนำสายตา */}
       <span
-        className={`mx-1 flex-1 border-b-2 border-dotted ${needsFix ? "border-red-300" : "border-gray-300"
-          }`}
+        className={`mx-1 flex-1 border-b-2 border-dotted ${
+          needsFix ? "border-red-300" : "border-gray-300"
+        }`}
       />
 
       {/* ปุ่มแนบไฟล์ / สถานะไฟล์ที่เลือก */}
@@ -410,20 +408,21 @@ function ListUploadRow({
               onChange(event.target.files?.[0] || null)
             }
           />
-          <span className="inline-flex items-center gap-1 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/50 px-3 py-1.5 text-xs font-black text-blue-700 hover:border-blue-500 hover:bg-blue-50">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/50 px-4 py-2 text-sm font-black text-blue-700 hover:border-blue-500 hover:bg-blue-50">
             📎 แนบไฟล์
           </span>
         </label>
       ) : (
-        <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5">
-          <span className="max-w-28 truncate text-xs font-bold text-green-700">
+        <span className="flex shrink-0 items-center gap-2 rounded-lg bg-green-50 px-3 py-2">
+          <span className="max-w-56 truncate text-sm font-bold text-green-700">
             {uploading ? "กำลังส่ง..." : file.name}
           </span>
           <button
             type="button"
             onClick={onRemove}
             disabled={uploading}
-            className="shrink-0 text-xs font-black text-red-500 hover:text-red-700 disabled:opacity-50"
+            aria-label="ลบไฟล์"
+            className="shrink-0 text-sm font-black text-red-500 hover:text-red-700 disabled:opacity-50"
           >
             ✕
           </button>

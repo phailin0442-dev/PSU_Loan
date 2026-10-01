@@ -139,6 +139,7 @@ function DocumentReview({ student, setPage, onSave }) {
         return parsed;
     };
 
+    //ส่วนที่ตีกลับไปหานักศึกษา
     const handleReviewAction = async (statusLabel) => {
         if (!activeRow?.id) return;
 
@@ -155,6 +156,7 @@ function DocumentReview({ student, setPage, onSave }) {
         setActionError("");
         setSavingAction(true);
 
+        //ยิงreviewDocument ว่าต้องแก้ไข
         try {
             await reviewDocument(applicationId, activeRow.id, {
                 status: statusLabel,

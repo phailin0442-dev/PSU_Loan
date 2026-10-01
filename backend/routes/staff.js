@@ -1,5 +1,8 @@
 const express = require("express");
 const pool = require("../config/db");
+const { requireLogin, requireRole } = require("../middleware/jwtAuth");
+const qualificationService = require("../services/qualificationService");
+const staffQueueService = require("../services/staffQueueService");
 
 const router = express.Router();
 
@@ -679,13 +682,19 @@ router.patch("/students/:studentId/documents/:documentId", async (req, res) => {
                       AND dr.academic_year = a.academic_year
                       AND dr.semester = a.semester
                       AND dr.is_active = TRUE
+                      AND dr.document_stage <> 'PRESCREEN'
                       AND (dr.min_age IS NULL OR dr.min_age <= EXTRACT(YEAR FROM AGE(CURRENT_DATE, sp.birth_date))::INTEGER)
                       AND (dr.max_age IS NULL OR dr.max_age >= EXTRACT(YEAR FROM AGE(CURRENT_DATE, sp.birth_date))::INTEGER)
                 ) AS required_count
              FROM psu_loan.applications a
              JOIN psu_loan.student_profiles sp ON sp.student_id = a.student_id
-             LEFT JOIN psu_loan.application_documents ad
-                 ON ad.application_id = a.application_id AND ad.is_current = TRUE
+                          LEFT JOIN psu_loan.application_documents ad
+                 ON ad.application_id = a.application_id
+                AND ad.is_current = TRUE
+                AND ad.requirement_id IN (
+                    SELECT requirement_id FROM psu_loan.document_requirements
+                    WHERE document_stage <> 'PRESCREEN'
+                )
              WHERE a.application_id = $1
              GROUP BY a.loan_type_id, a.academic_year, a.semester, sp.birth_date`,
             [applicationId]
@@ -1049,6 +1058,49 @@ router.patch("/application-periods/:id/toggle", async (req, res) => {
             success: false,
             message: "ไม่สามารถเปลี่ยนสถานะช่วงเวลาได้",
         });
+    }
+});
+
+/*
+|--------------------------------------------------------------------------
+| จัดการรอบเวลายื่นเอกสาร (หน้าจัดการคิวเจ้าหน้าที่)
+|--------------------------------------------------------------------------
+| GET /api/staff/queue-slots?from=YYYY-MM-DD&to=YYYY-MM-DD
+| PUT /api/staff/queue-slots
+|--------------------------------------------------------------------------
+*/
+
+const staffOnly = [requireLogin, requireRole("STAFF", "ADMIN")];
+
+function sendQueueError(res, error, fallbackMessage, logLabel) {
+    if (!error.status) console.error(logLabel, error);
+    return res.status(error.status || 500).json({
+        success: false,
+        code: error.code,
+        message: error.status ? error.message : fallbackMessage,
+    });
+}
+
+router.get("/queue-slots", staffOnly, async (req, res) => {
+    try {
+        const data = await staffQueueService.getSchedule({ from: req.query.from, to: req.query.to });
+        return res.status(200).json({ success: true, data });
+    } catch (error) {
+        return sendQueueError(res, error, "ไม่สามารถโหลดรอบเวลาได้", "GET /api/staff/queue-slots error:");
+    }
+});
+
+router.put("/queue-slots", staffOnly, async (req, res) => {
+    try {
+        const data = await staffQueueService.saveSchedule({
+            from: req.body.from,
+            to: req.body.to,
+            days: req.body.days,
+            staffId: req.user.userId, // มาจาก token ของเจ้าหน้าที่ที่ login
+        });
+        return res.status(200).json({ success: true, message: "บันทึกรอบเวลาเรียบร้อยแล้ว", data });
+    } catch (error) {
+        return sendQueueError(res, error, "ไม่สามารถบันทึกรอบเวลาได้", "PUT /api/staff/queue-slots error:");
     }
 });
 

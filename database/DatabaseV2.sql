@@ -11,16 +11,20 @@ SET search_path TO psu_loan, public;
 -- ENUM TYPES
 -- =========================
 CREATE TYPE user_role_code AS ENUM ('STUDENT','STAFF','ADMIN');
+//สถานะคำร้องกู้ยืม
 CREATE TYPE application_status_code AS ENUM (
   'DRAFT','SUBMITTED','ELIGIBILITY_REVIEW','ELIGIBILITY_FAILED',
   'DOCUMENT_REVIEW','REVISION_REQUIRED','DOCUMENT_APPROVED',
   'QUEUE_BOOKED','SIGNED','CENTRAL_SUBMITTED','COMPLETED','CANCELLED'
 );
+//ผลตรวจคุณสมบัติ
 CREATE TYPE eligibility_result_code AS ENUM ('PENDING','PASSED','FAILED','NOT_REQUIRED');
 CREATE TYPE document_review_status_code AS ENUM ('PENDING','APPROVED','REVISION_REQUIRED','REJECTED');
 CREATE TYPE booking_status_code AS ENUM ('BOOKED','CHECKED_IN','COMPLETED','CANCELLED','NO_SHOW');
 CREATE TYPE slot_status_code AS ENUM ('OPEN','CLOSED','CANCELLED');
+//สถานะการเซ็นสัญญา
 CREATE TYPE signing_status_code AS ENUM ('PENDING','VERIFIED','SIGNED','FAILED');
+//สถานะการส่งเรื่องไปส่วนกลาง (กยศ.)
 CREATE TYPE central_submission_status_code AS ENUM ('PENDING','SUBMITTED','ACKNOWLEDGED','REJECTED');
 
 -- =========================
@@ -31,7 +35,7 @@ CREATE TABLE roles (
   role_code user_role_code NOT NULL UNIQUE,
   role_name_th VARCHAR(100) NOT NULL,
   description VARCHAR(255),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,//สร้างเลข ID ให้เองอัตโนมัติทุกครั้งที่เพิ่มข้อมูลใหม่
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -49,6 +53,7 @@ CREATE TABLE users (
 CREATE UNIQUE INDEX uq_users_email_lower ON users(lower(email));
 CREATE INDEX idx_users_role_id ON users(role_id);
 
+//ข้อมูลนักศึกษา
 CREATE TABLE student_profiles (
   student_id BIGINT PRIMARY KEY REFERENCES users(user_id) ON UPDATE CASCADE ON DELETE CASCADE,
   student_code VARCHAR(20) NOT NULL UNIQUE,
@@ -76,6 +81,7 @@ CREATE TABLE student_profiles (
   CONSTRAINT ck_student_birth_date CHECK (birth_date < CURRENT_DATE)
 );
 
+//ข้อมูลเจ้าหน้าที่
 CREATE TABLE staff_profiles (
   staff_id BIGINT PRIMARY KEY REFERENCES users(user_id) ON UPDATE CASCADE ON DELETE CASCADE,
   employee_code VARCHAR(30) NOT NULL UNIQUE,
@@ -89,6 +95,7 @@ CREATE TABLE staff_profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+//ข้อมูลผู้ปกครอง
 CREATE TABLE guardians (
   guardian_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   student_id BIGINT NOT NULL REFERENCES student_profiles(student_id) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -100,7 +107,7 @@ CREATE TABLE guardians (
   phone VARCHAR(20) NOT NULL,
   address_text TEXT,
   is_primary BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,//บันทึกเวลา/แก้ไข
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT ck_guardian_citizen_id CHECK (citizen_id ~ '^[0-9]{13}$')
 );
@@ -119,7 +126,7 @@ CREATE TABLE loan_types (
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
+//คุณสมบัติแยกตามปีการศึกษา+ภาคเรียน+ประเภทผู้กู้
 CREATE TABLE eligibility_rules (
   eligibility_rule_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   loan_type_id BIGINT NOT NULL REFERENCES loan_types(loan_type_id) ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -332,16 +339,16 @@ CREATE TABLE central_submissions (
   )
 );
 
--- =========================
--- TRIGGERS
--- =========================
-CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+CE FUNCTION set_updated_at() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN NEW.updated_at := CURRENT_TIMESTAMP; RETURN NEW; END; $$;
 
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['roles','users','student_profiles','staff_profiles','guardians','loan_types','eligibility_rules','document_types','document_requirements','applications','queue_slots','queue_bookings','signing_records','central_submissions']
+  FOREACH t IN A-- =========================
+-- TRIGGERS
+-- =========================
+CREATE OR REPLARRAY ARRAY['roles','users','student_profiles','staff_profiles','guardians','loan_types','eligibility_rules','document_types','document_requirements','applications','queue_slots','queue_bookings','signing_records','central_submissions']
   LOOP
     EXECUTE format('CREATE TRIGGER trg_%I_updated_at BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION set_updated_at()', t, t);
   END LOOP;

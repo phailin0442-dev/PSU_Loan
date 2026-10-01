@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
     createContext,
     useCallback,
@@ -264,34 +265,41 @@ export function AppProvider({ children }) {
     const [myProfile, setMyProfile] = useState(null);
     const [profileLoading, setProfileLoading] = useState(false);
 
-    const refreshMyProfile = useCallback(async () => {
-        if (!currentUser?.userId) {
-            setMyProfile(null);
-            return null;
-        }
+    const currentUserId = currentUser?.userId;
 
-        setProfileLoading(true);
+const refreshMyProfile = useCallback(async () => {
+    if (!currentUserId) {
+        setMyProfile(null);
+        return null;
+    }
 
-        try {
-            const result = await fetchMyProfile(currentUser.userId);
-            setMyProfile(result.data);
-            return result.data;
-        } catch (error) {
-            setMyProfile(null);
-            return null;
-        } finally {
-            setProfileLoading(false);
-        }
-    }, [currentUser?.userId]);
+    setProfileLoading(true);
 
-    useEffect(() => {
+    try {
+        const result = await fetchMyProfile(currentUserId);
+        setMyProfile(result.data);
+        return result.data;
+    } catch {
+        setMyProfile(null);
+        return null;
+    } finally {
+        setProfileLoading(false);
+    }
+}, [currentUserId]);
+
+useEffect(() => {
+    const timerId = window.setTimeout(() => {
         if (isAuthenticated && role === "student") {
-            refreshMyProfile();
+            void refreshMyProfile();
         } else {
             setMyProfile(null);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAuthenticated, currentUser?.userId]);
+    }, 0);
+
+    return () => {
+        window.clearTimeout(timerId);
+    };
+}, [isAuthenticated, role, refreshMyProfile]);
 
     const saveMyProfile = async (payload) => {
         await updateMyProfile(currentUser.userId, payload);
@@ -440,7 +448,7 @@ export function AppProvider({ children }) {
                 setLoading(false);
             }
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        //* eslint-disable-next-line react-hooks/exhaustive-deps
         [currentUser]
     );
 
@@ -476,17 +484,30 @@ export function AppProvider({ children }) {
     }, [selectedStudentId]);
 
     useEffect(() => {
-        if (!selectedStudentId) return;
+    if (!selectedStudentId) {
+        return undefined;
+    }
 
-        const current = students.find(
-            (student) => student.id === selectedStudentId
-        );
+    const current = students.find(
+        (student) => student.id === selectedStudentId
+    );
 
-        if (current && !current._detailLoaded) {
-            refreshSelectedStudentDetail();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedStudentId]);
+    if (!current || current._detailLoaded) {
+        return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+        void refreshSelectedStudentDetail();
+    }, 0);
+
+    return () => {
+        window.clearTimeout(timerId);
+    };
+}, [
+    selectedStudentId,
+    students,
+    refreshSelectedStudentDetail,
+]);
 
     const selectedStudent = useMemo(() => {
         // ถ้า login เป็นนักศึกษาจริงอยู่ ต้องเห็นแค่ข้อมูลของตัวเองเท่านั้น

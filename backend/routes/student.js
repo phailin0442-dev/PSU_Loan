@@ -1,5 +1,7 @@
 const express = require("express");
 const pool = require("../config/db");
+const queueService = require("../services/queueService");
+const { requireLogin } = require("../middleware/jwtAuth");
 
 const router = express.Router();
 
@@ -12,6 +14,102 @@ function parsePositiveInteger(value) {
 
     return parsedValue;
 }
+
+function sendBookingError(res, error, fallbackMessage, logLabel) {
+    if (!error.status) console.error(logLabel, error);
+
+    return res.status(error.status || 500).json({
+        success: false,
+        code: error.code,
+        message: error.status ? error.message : fallbackMessage,
+    });
+}
+
+/*
+|==========================================================================
+| การจองวันเวลายื่นเอกสาร
+|==========================================================================
+| ต้องประกาศไว้ "ก่อน" router.get("/:id") เสมอ
+| ไม่อย่างนั้น Express จะจับ "booking-slots" เป็นรหัสคำร้องแล้วตอบ 400
+|==========================================================================
+*/
+
+/*
+|------------------------------------------------------------------
+| ช่วงเวลาที่เปิดให้จอง
+| GET /api/student/booking-slots?days=14
+|------------------------------------------------------------------
+*/
+router.get("/booking-slots", requireLogin, async (req, res) => {
+    try {
+        const slots = await queueService.getBookableSlots({ days: req.query.days });
+
+        return res.status(200).json({ success: true, data: slots });
+    } catch (error) {
+        return sendBookingError(res, error, "ไม่สามารถโหลดรอบเวลาได้", "GET /api/student/booking-slots error:");
+    }
+});
+
+/*
+|------------------------------------------------------------------
+| การจองที่ใช้งานอยู่ของคำร้อง (ไม่มี = data: null)
+| GET /api/student/applications/:applicationId/booking
+|------------------------------------------------------------------
+*/
+router.get("/applications/:applicationId/booking", requireLogin, async (req, res) => {
+    try {
+        const booking = await queueService.getActiveBooking({
+            applicationId: req.params.applicationId,
+            userId: req.user.userId,
+        });
+
+        return res.status(200).json({ success: true, data: booking });
+    } catch (error) {
+        return sendBookingError(res, error, "ไม่สามารถโหลดข้อมูลการจองได้", "GET /api/student/applications/:id/booking error:");
+    }
+});
+
+/*
+|------------------------------------------------------------------
+| จอง / เปลี่ยนวันเวลา
+| POST /api/student/bookings
+| Body: { applicationId, slotId }
+|------------------------------------------------------------------
+*/
+router.post("/bookings", requireLogin, async (req, res) => {
+    try {
+        const booking = await queueService.bookSlot({
+            applicationId: req.body.applicationId,
+            slotId: req.body.slotId,
+            userId: req.user.userId, // มาจาก token เท่านั้น ห้ามรับจาก body
+        });
+
+        return res.status(201).json({ success: true, message: "จองวันเวลาสำเร็จ", data: booking });
+    } catch (error) {
+        return sendBookingError(res, error, "ไม่สามารถจองได้", "POST /api/student/bookings error:");
+    }
+});
+
+/*
+|------------------------------------------------------------------
+| ยกเลิกการจอง
+| POST /api/student/bookings/cancel
+| Body: { applicationId, reason }
+|------------------------------------------------------------------
+*/
+router.post("/bookings/cancel", requireLogin, async (req, res) => {
+    try {
+        const result = await queueService.cancelBooking({
+            applicationId: req.body.applicationId,
+            reason: req.body.reason,
+            userId: req.user.userId,
+        });
+
+        return res.status(200).json({ success: true, message: "ยกเลิกการจองเรียบร้อยแล้ว", data: result });
+    } catch (error) {
+        return sendBookingError(res, error, "ไม่สามารถยกเลิกการจองได้", "POST /api/student/bookings/cancel error:");
+    }
+});
 
 /*
 |--------------------------------------------------------------------------

@@ -1,24 +1,73 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useApp } from "../context/AppContext";
 
 const loanTypeLabels = {
     NEW: "ผู้กู้รายใหม่",
-    CONTINUING_SPECIAL:
-        "ผู้กู้ต่อเนื่องกรณีพิเศษ",
-    CONTINUING_YEAR:
-        "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
+    CONTINUING_SPECIAL: "ผู้กู้ต่อเนื่องกรณีพิเศษ",
+    CONTINUING_YEAR: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
 };
 
-function StudentInfo({ setPage }) {
-    const {
-        selectedStudent,
-        updateSelectedStudent,
-        myProfile,
-        saveMyProfile,
-    } = useApp();
+// รวมข้อมูลคำร้อง (selectedStudent) กับข้อมูลส่วนตัวจริง (myProfile จาก student_profiles)
+function mergeProfileIntoForm(current, selectedStudent, myProfile) {
+    const base = { ...current, ...(selectedStudent || {}) };
 
-    const [formData, setFormData] =
-        useState(selectedStudent || {});
+    if (!myProfile) return base;
+
+    return {
+        ...base,
+        studentId: myProfile.studentId || base.studentId || "",
+        prefix:
+            myProfile.prefix && myProfile.prefix !== "-"
+                ? myProfile.prefix
+                : base.prefix || "",
+        firstName: myProfile.firstName || base.firstName || "",
+        lastName: myProfile.lastName || base.lastName || "",
+        // เลขที่ระบบใส่ให้ตอนสมัคร (เติม 0 ด้านหน้า) ถือว่ายังไม่ได้กรอก
+        citizenId:
+            myProfile.citizenId && !/^0{6}/.test(myProfile.citizenId)
+                ? myProfile.citizenId
+                : base.citizenId || "",
+        birthDate:
+            myProfile.birthDate &&
+            String(myProfile.birthDate).slice(0, 10) !== "2000-01-01"
+                ? String(myProfile.birthDate).slice(0, 10)
+                : base.birthDate || "",
+        phone: myProfile.phone || base.phone || "",
+        email: myProfile.email || base.email || "",
+        faculty:
+            myProfile.faculty && myProfile.faculty !== "-"
+                ? myProfile.faculty
+                : base.faculty || "",
+        major:
+            myProfile.major && myProfile.major !== "-"
+                ? myProfile.major
+                : base.major || "",
+        yearLevel: myProfile.yearLevel || base.yearLevel || "",
+        province:
+            myProfile.province && myProfile.province !== "-"
+                ? myProfile.province
+                : base.province || "",
+        postalCode:
+            myProfile.postalCode && myProfile.postalCode !== "00000"
+                ? myProfile.postalCode
+                : base.postalCode || "",
+        address:
+            myProfile.houseNo && myProfile.houseNo !== "-"
+                ? myProfile.houseNo
+                : base.address || "",
+        loanTypeCode:
+            myProfile.loanTypeCode && myProfile.loanTypeCode !== "-"
+                ? myProfile.loanTypeCode
+                : base.loanTypeCode || "",
+    };
+}
+
+function StudentInfo({ setPage }) {
+    const { selectedStudent, myProfile, saveMyProfile } = useApp();
+
+    const [formData, setFormData] = useState(selectedStudent || {});
+    const [message, setMessage] = useState("");
+    const [messageType, setMessageType] = useState("");
 
     // แท็บที่เปิดอยู่ตอนนี้ (0-6) — ให้กรอกทีละหัวข้อแทนเลื่อนยาว
     const [activeSection, setActiveSection] = useState(0);
@@ -33,80 +82,17 @@ function StudentInfo({ setPage }) {
         { icon: "📋", label: "ข้อมูลการกู้ยืม" },
     ];
 
-    const [message, setMessage] =
-        useState("");
+    // เติมข้อมูลลงฟอร์มทุกครั้งที่ selectedStudent หรือ myProfile เปลี่ยน
+    // ทำระหว่าง render (เก็บค่าก่อนหน้าไว้เทียบ) แทน useEffect ตามแนวทางของ React
+    // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+    const [prevSources, setPrevSources] = useState({ selectedStudent: undefined, myProfile: undefined });
 
-    const [messageType, setMessageType] =
-        useState("");
-
-    // รวม effect เดียว — เดิมแยกเป็น 2 effect (จาก selectedStudent กับ
-    // myProfile) ซึ่งแย่งกันเขียนทับ formData เวลา selectedStudent เปลี่ยน
-    // (แม้ค่ายังเป็น null เหมือนเดิม) จะรีเซ็ตทับข้อมูลที่ myProfile เพิ่ง
-    // เติมไปแล้ว ทำให้ข้อมูลหาย/บันทึกไม่ได้ — รวมเป็นตัวเดียวรันพร้อมกัน
-    // เสมอ กัน race condition นี้
-    useEffect(() => {
+    if (prevSources.selectedStudent !== selectedStudent || prevSources.myProfile !== myProfile) {
+        setPrevSources({ selectedStudent, myProfile });
         setMessage("");
         setMessageType("");
-
-        setFormData((current) => {
-            // เริ่มจาก selectedStudent (ถ้ามีคำร้องอยู่แล้ว จะมีข้อมูล
-            // ทุกแท็บรวมทั้งบิดา/มารดา/ครอบครัวที่เป็น local state)
-            const base = { ...current, ...(selectedStudent || {}) };
-
-            // myProfile คือข้อมูลจริงจาก student_profiles (ไม่ผูกกับคำร้อง)
-            // ใช้ทับแท็บ "ข้อมูลส่วนบุคคล"/"การศึกษา" เสมอ เพราะเป็นข้อมูล
-            // จริงจาก backend มีให้ใช้ตั้งแต่สมัครสมาชิกเสร็จ
-            if (!myProfile) return base;
-
-            return {
-                ...base,
-                studentId: myProfile.studentId || base.studentId || "",
-                prefix:
-                    myProfile.prefix && myProfile.prefix !== "-"
-                        ? myProfile.prefix
-                        : base.prefix || "",
-                firstName: myProfile.firstName || base.firstName || "",
-                lastName: myProfile.lastName || base.lastName || "",
-                citizenId:
-                    myProfile.citizenId && !/^0+$/.test(myProfile.citizenId)
-                        ? myProfile.citizenId
-                        : base.citizenId || "",
-                birthDate:
-                    myProfile.birthDate &&
-                        String(myProfile.birthDate).slice(0, 10) !== "2000-01-01"
-                        ? String(myProfile.birthDate).slice(0, 10)
-                        : base.birthDate || "",
-                phone: myProfile.phone || base.phone || "",
-                email: myProfile.email || base.email || "",
-                faculty:
-                    myProfile.faculty && myProfile.faculty !== "-"
-                        ? myProfile.faculty
-                        : base.faculty || "",
-                major:
-                    myProfile.major && myProfile.major !== "-"
-                        ? myProfile.major
-                        : base.major || "",
-                yearLevel: myProfile.yearLevel || base.yearLevel || "",
-                province:
-                    myProfile.province && myProfile.province !== "-"
-                        ? myProfile.province
-                        : base.province || "",
-                postalCode:
-                    myProfile.postalCode && myProfile.postalCode !== "00000"
-                        ? myProfile.postalCode
-                        : base.postalCode || "",
-                address:
-                    myProfile.houseNo && myProfile.houseNo !== "-"
-                        ? myProfile.houseNo
-                        : base.address || "",
-                loanTypeCode:
-                    myProfile.loanTypeCode &&
-                        myProfile.loanTypeCode !== "-"
-                        ? myProfile.loanTypeCode
-                        : base.loanTypeCode || "",
-            };
-        });
-    }, [selectedStudent, myProfile]);
+        setFormData((current) => mergeProfileIntoForm(current, selectedStudent, myProfile));
+    }
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -125,13 +111,7 @@ function StudentInfo({ setPage }) {
     const handleSubmit = async (event) => {
         event.preventDefault();
 
-        // แม็ปฟิลด์บังคับไปยังแท็บที่ฟิลด์นั้นอยู่ ใช้กระโดดไปแท็บที่ขาด
-        // ข้อมูลให้อัตโนมัติ จะได้ไม่งงว่ากรอกไม่ครบตรงไหน
-        //
-        // หมายเหตุ: ตัด semester/loanTypeCode ออกจากฟิลด์บังคับตรงนี้แล้ว
-        // เพราะย้ายไปเก็บตอน "สร้างคำร้องกู้ยืม" (หน้าคำขอกู้ยืมเงิน กยศ.)
-        // แทน — หน้านี้เก็บแค่ "ข้อมูลส่วนตัว" ที่ผูกกับ student_profiles
-        // ตรงๆ ซึ่งมีอยู่แล้วตั้งแต่สมัครสมาชิกเสร็จ ไม่ต้องรอมีคำร้องก่อน
+        // แม็ปฟิลด์บังคับไปยังแท็บที่ฟิลด์นั้นอยู่ ใช้กระโดดไปแท็บที่ขาดข้อมูลให้อัตโนมัติ
         const requiredFieldTabs = {
             prefix: 0,
             firstName: 0,
@@ -150,19 +130,13 @@ function StudentInfo({ setPage }) {
 
         const requiredFields = Object.keys(requiredFieldTabs);
 
-        const missingFields =
-            requiredFields.filter(
-                (field) =>
-                    !String(
-                        formData[field] ?? ""
-                    ).trim()
-            );
+        const missingFields = requiredFields.filter(
+            (field) => !String(formData[field] ?? "").trim()
+        );
 
         if (missingFields.length > 0) {
             const firstMissingTab = Math.min(
-                ...missingFields.map(
-                    (field) => requiredFieldTabs[field]
-                )
+                ...missingFields.map((field) => requiredFieldTabs[field])
             );
 
             setActiveSection(firstMissingTab);
@@ -192,17 +166,7 @@ function StudentInfo({ setPage }) {
             return;
         }
 
-        const fullName =
-            `${formData.prefix || ""}${formData.firstName || ""
-                } ${formData.lastName || ""
-                }`.trim();
-
-        const selectedLoanTypeLabel =
-            loanTypeLabels[
-            formData.loanTypeCode
-            ] || "-";
-
-        // บันทึกจริงลง student_profiles ก่อน (ไม่ผูกกับคำร้อง ใช้ได้เสมอ)
+        // บันทึกจริงลง student_profiles (ไม่ผูกกับคำร้อง ใช้ได้เสมอ)
         setMessage("");
         setMessageType("");
 
@@ -232,18 +196,7 @@ function StudentInfo({ setPage }) {
             return;
         }
 
-        // หมายเหตุ: เอา updateSelectedStudent() ที่เคยอยู่ตรงนี้ออกแล้ว —
-        // ของเดิมบังคับรีเซ็ต eligibilityCompleted/documentsCompleted เป็น
-        // false ทุกครั้งที่บันทึกข้อมูลส่วนตัว ทั้งที่ไม่ควรมีผลต่อกัน
-        // เลย (เป็นโค้ดเก่าตกค้างจากตอนยังไม่เชื่อม backend จริง) ตอนนี้
-        // saveMyProfile() ข้างบนบันทึกจริงลง student_profiles แล้ว และ
-        // ข้อมูลคำร้อง (ถ้ามี) ก็ดึงจาก backend ตรงๆ อยู่แล้ว ไม่ต้องแตะ
-        // สถานะคัดกรอง/เอกสารจากหน้านี้เลย
-
-        setMessage(
-            "บันทึกข้อมูลเรียบร้อยแล้ว"
-        );
-
+        setMessage("บันทึกข้อมูลเรียบร้อยแล้ว");
         setMessageType("success");
 
         alert("✅ บันทึกข้อมูลเรียบร้อยแล้ว");
@@ -254,27 +207,27 @@ function StudentInfo({ setPage }) {
     };
 
     return (
-        <main className="w-full px-6 py-8 lg:px-12">
-            <section className="mx-auto max-w-7xl">
-                <div className="overflow-hidden rounded-[32px] bg-gradient-to-r from-[#07116f] to-[#0646ff] shadow-lg">
-                    <div className="flex flex-col gap-6 p-8 text-white md:flex-row md:items-center md:justify-between lg:p-10">
-                        <div className="flex items-center gap-5">
-                            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/15 text-4xl ring-1 ring-white/20">
+        <main className="w-full px-4 py-6 sm:px-6 lg:px-10 2xl:px-14">
+            <section className="mx-auto w-full max-w-[1440px]">
+                {/* ส่วนหัว */}
+                <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-[#07116f] to-[#0646ff] shadow-md">
+                    <div className="flex flex-col gap-5 p-6 text-white sm:flex-row sm:items-center sm:justify-between lg:px-8">
+                        <div className="flex items-center gap-4">
+                            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-3xl ring-1 ring-white/20">
                                 ✏️
                             </div>
 
-                            <div>
-                                <p className="text-sm font-black text-blue-100">
+                            <div className="min-w-0">
+                                <p className="text-xs font-bold text-blue-100">
                                     แบบฟอร์มข้อมูลนักศึกษา
                                 </p>
 
-                                <h1 className="mt-2 text-3xl font-black md:text-4xl">
+                                <h1 className="mt-1 text-2xl font-black md:text-[1.75rem]">
                                     แก้ไขข้อมูลนักศึกษา
                                 </h1>
 
-                                <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
-                                    ตรวจสอบและแก้ไขข้อมูลส่วนบุคคล
-                                    ข้อมูลการศึกษา
+                                <p className="mt-1 max-w-2xl text-xs leading-5 text-blue-100 sm:text-sm">
+                                    ตรวจสอบและแก้ไขข้อมูลส่วนบุคคล ข้อมูลการศึกษา
                                     และข้อมูลครอบครัวให้ครบถ้วน
                                 </p>
                             </div>
@@ -282,29 +235,23 @@ function StudentInfo({ setPage }) {
 
                         <button
                             type="button"
-                            onClick={() =>
-                                setPage(
-                                    "studentProfiles"
-                                )
-                            }
-                            className="rounded-2xl bg-white px-7 py-3.5 font-black text-[#07116f] shadow transition hover:bg-blue-50"
+                            onClick={() => setPage("studentProfiles")}
+                            className="shrink-0 self-start rounded-xl bg-white px-5 py-2.5 text-sm font-black text-[#07116f] shadow-sm transition hover:bg-blue-50 sm:self-auto"
                         >
                             ← กลับหน้าข้อมูล
                         </button>
                     </div>
                 </div>
 
-                <div className="mt-6 flex items-start gap-4 rounded-2xl border border-orange-200 bg-orange-50 p-5 text-orange-700">
-                    <span className="text-2xl">
-                        ⚠️
-                    </span>
+                <div className="mt-4 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-orange-700">
+                    <span className="text-xl">⚠️</span>
 
                     <div>
-                        <p className="font-black">
+                        <p className="text-sm font-black">
                             การแก้ไขข้อมูลมีผลต่อการคัดกรอง
                         </p>
 
-                        <p className="mt-1 text-sm leading-6">
+                        <p className="mt-0.5 text-xs leading-5">
                             เมื่อบันทึกข้อมูลใหม่
                             ระบบจะล้างผลคัดกรองและรายการเอกสารเดิม
                             เพื่อให้ตรวจสอบเงื่อนไขใหม่อีกครั้ง
@@ -312,26 +259,21 @@ function StudentInfo({ setPage }) {
                     </div>
                 </div>
 
-                <div
-                    className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-start"
-                >
+                <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-stretch">
                     {/* Sidebar เลือกหัวข้อ */}
-                    <nav className="flex gap-2 overflow-x-auto rounded-2xl bg-white p-3 shadow-sm lg:sticky lg:top-6 lg:w-64 lg:shrink-0 lg:flex-col lg:overflow-visible">
+                    <nav className="flex gap-1.5 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm lg:sticky lg:top-6 lg:w-60 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible xl:w-64">
                         {sections.map((section, index) => (
                             <button
                                 key={section.label}
                                 type="button"
-                                onClick={() =>
-                                    setActiveSection(index)
-                                }
-                                className={`flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-black transition lg:shrink ${activeSection === index
-                                        ? "bg-[#07116f] text-white shadow-md"
+                                onClick={() => setActiveSection(index)}
+                                className={`flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition lg:shrink ${
+                                    activeSection === index
+                                        ? "bg-[#07116f] text-white shadow-sm"
                                         : "text-gray-600 hover:bg-blue-50"
-                                    }`}
+                                }`}
                             >
-                                <span className="text-lg">
-                                    {section.icon}
-                                </span>
+                                <span className="text-base">{section.icon}</span>
                                 <span className="whitespace-nowrap lg:whitespace-normal">
                                     {section.label}
                                 </span>
@@ -340,41 +282,25 @@ function StudentInfo({ setPage }) {
                     </nav>
 
                     {/* เนื้อหาของแท็บที่เลือก */}
-                    <div className="min-w-0 flex-1 space-y-6">
+                    <div className="flex min-w-0 flex-1 flex-col gap-4">
                         {activeSection === 0 && (
                             <FormSection
                                 icon="👤"
                                 title="ข้อมูลส่วนบุคคล"
                                 subtitle="ข้อมูลทั่วไปของนักศึกษาผู้ยื่นคำขอกู้"
                             >
-                                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     <SelectInput
                                         label="คำนำหน้าชื่อ"
                                         required
                                         name="prefix"
-                                        value={
-                                            formData.prefix
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.prefix}
+                                        onChange={handleChange}
                                         options={[
-                                            {
-                                                value: "",
-                                                label: "เลือกคำนำหน้าชื่อ",
-                                            },
-                                            {
-                                                value: "นาย",
-                                                label: "นาย",
-                                            },
-                                            {
-                                                value: "นางสาว",
-                                                label: "นางสาว",
-                                            },
-                                            {
-                                                value: "นาง",
-                                                label: "นาง",
-                                            },
+                                            { value: "", label: "เลือกคำนำหน้าชื่อ" },
+                                            { value: "นาย", label: "นาย" },
+                                            { value: "นางสาว", label: "นางสาว" },
+                                            { value: "นาง", label: "นาง" },
                                         ]}
                                     />
 
@@ -382,12 +308,8 @@ function StudentInfo({ setPage }) {
                                         label="ชื่อ"
                                         required
                                         name="firstName"
-                                        value={
-                                            formData.firstName
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.firstName}
+                                        onChange={handleChange}
                                         placeholder="กรอกชื่อ"
                                     />
 
@@ -395,12 +317,8 @@ function StudentInfo({ setPage }) {
                                         label="นามสกุล"
                                         required
                                         name="lastName"
-                                        value={
-                                            formData.lastName
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.lastName}
+                                        onChange={handleChange}
                                         placeholder="กรอกนามสกุล"
                                     />
 
@@ -408,12 +326,8 @@ function StudentInfo({ setPage }) {
                                         label="เลขประจำตัวประชาชน"
                                         required
                                         name="citizenId"
-                                        value={
-                                            formData.citizenId
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.citizenId}
+                                        onChange={handleChange}
                                         placeholder="เลขประจำตัวประชาชน 13 หลัก"
                                         maxLength={13}
                                         inputMode="numeric"
@@ -424,68 +338,37 @@ function StudentInfo({ setPage }) {
                                         required
                                         name="birthDate"
                                         type="date"
-                                        value={
-                                            formData.birthDate
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.birthDate}
+                                        onChange={handleChange}
                                     />
 
                                     <Input
                                         label="สัญชาติ"
                                         name="nationality"
-                                        value={
-                                            formData.nationality
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.nationality}
+                                        onChange={handleChange}
                                         placeholder="เช่น ไทย"
                                     />
 
                                     <Input
                                         label="ศาสนา"
                                         name="religion"
-                                        value={
-                                            formData.religion
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.religion}
+                                        onChange={handleChange}
                                         placeholder="ระบุศาสนา"
                                     />
 
                                     <SelectInput
                                         label="สถานภาพ"
                                         name="maritalStatus"
-                                        value={
-                                            formData.maritalStatus
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.maritalStatus}
+                                        onChange={handleChange}
                                         options={[
-                                            {
-                                                value: "",
-                                                label: "เลือกสถานภาพ",
-                                            },
-                                            {
-                                                value: "โสด",
-                                                label: "โสด",
-                                            },
-                                            {
-                                                value: "สมรส",
-                                                label: "สมรส",
-                                            },
-                                            {
-                                                value: "หย่าร้าง",
-                                                label: "หย่าร้าง",
-                                            },
-                                            {
-                                                value: "หม้าย",
-                                                label: "หม้าย",
-                                            },
+                                            { value: "", label: "เลือกสถานภาพ" },
+                                            { value: "โสด", label: "โสด" },
+                                            { value: "สมรส", label: "สมรส" },
+                                            { value: "หย่าร้าง", label: "หย่าร้าง" },
+                                            { value: "หม้าย", label: "หม้าย" },
                                         ]}
                                     />
 
@@ -493,12 +376,8 @@ function StudentInfo({ setPage }) {
                                         label="หมายเลขโทรศัพท์"
                                         required
                                         name="phone"
-                                        value={
-                                            formData.phone
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.phone}
+                                        onChange={handleChange}
                                         placeholder="08XXXXXXXX"
                                         inputMode="tel"
                                     />
@@ -508,12 +387,8 @@ function StudentInfo({ setPage }) {
                                         required
                                         name="email"
                                         type="email"
-                                        value={
-                                            formData.email
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.email}
+                                        onChange={handleChange}
                                         placeholder="example@email.com"
                                     />
 
@@ -521,12 +396,8 @@ function StudentInfo({ setPage }) {
                                         label="จังหวัด"
                                         required
                                         name="province"
-                                        value={
-                                            formData.province
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.province}
+                                        onChange={handleChange}
                                         placeholder="ระบุจังหวัด"
                                     />
 
@@ -534,12 +405,8 @@ function StudentInfo({ setPage }) {
                                         label="รหัสไปรษณีย์"
                                         required
                                         name="postalCode"
-                                        value={
-                                            formData.postalCode
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.postalCode}
+                                        onChange={handleChange}
                                         placeholder="รหัสไปรษณีย์"
                                         maxLength={5}
                                         inputMode="numeric"
@@ -550,12 +417,8 @@ function StudentInfo({ setPage }) {
                                             label="ที่อยู่ปัจจุบัน"
                                             required
                                             name="address"
-                                            value={
-                                                formData.address
-                                            }
-                                            onChange={
-                                                handleChange
-                                            }
+                                            value={formData.address}
+                                            onChange={handleChange}
                                             placeholder="บ้านเลขที่ หมู่ ถนน ตำบล อำเภอ จังหวัด"
                                         />
                                     </div>
@@ -569,16 +432,12 @@ function StudentInfo({ setPage }) {
                                 title="ข้อมูลการศึกษา"
                                 subtitle="ข้อมูลสถานภาพนักศึกษาและภาคการศึกษาปัจจุบัน"
                             >
-                                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     <Input
                                         label="รหัสนักศึกษา"
                                         name="studentId"
-                                        value={
-                                            formData.studentId
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.studentId}
+                                        onChange={handleChange}
                                         placeholder="กรอกรหัสนักศึกษา"
                                         disabled
                                     />
@@ -587,12 +446,8 @@ function StudentInfo({ setPage }) {
                                         label="คณะ"
                                         required
                                         name="faculty"
-                                        value={
-                                            formData.faculty
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.faculty}
+                                        onChange={handleChange}
                                         placeholder="ระบุคณะ"
                                     />
 
@@ -600,12 +455,8 @@ function StudentInfo({ setPage }) {
                                         label="สาขาวิชา"
                                         required
                                         name="major"
-                                        value={
-                                            formData.major
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.major}
+                                        onChange={handleChange}
                                         placeholder="ระบุสาขาวิชา"
                                     />
 
@@ -613,44 +464,18 @@ function StudentInfo({ setPage }) {
                                         label="ชั้นปี"
                                         required
                                         name="yearLevel"
-                                        value={
-                                            formData.yearLevel
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.yearLevel}
+                                        onChange={handleChange}
                                         options={[
-                                            {
-                                                value: "",
-                                                label: "เลือกชั้นปี",
-                                            },
-                                            {
-                                                value: "1",
-                                                label: "ชั้นปีที่ 1",
-                                            },
-                                            {
-                                                value: "2",
-                                                label: "ชั้นปีที่ 2",
-                                            },
-                                            {
-                                                value: "3",
-                                                label: "ชั้นปีที่ 3",
-                                            },
-                                            {
-                                                value: "4",
-                                                label: "ชั้นปีที่ 4",
-                                            },
-                                            {
-                                                value: "5",
-                                                label: "ชั้นปีที่ 5",
-                                            },
-                                            {
-                                                value: "6",
-                                                label: "ชั้นปีที่ 6",
-                                            },
+                                            { value: "", label: "เลือกชั้นปี" },
+                                            { value: "1", label: "ชั้นปีที่ 1" },
+                                            { value: "2", label: "ชั้นปีที่ 2" },
+                                            { value: "3", label: "ชั้นปีที่ 3" },
+                                            { value: "4", label: "ชั้นปีที่ 4" },
+                                            { value: "5", label: "ชั้นปีที่ 5" },
+                                            { value: "6", label: "ชั้นปีที่ 6" },
                                         ]}
                                     />
-
                                 </div>
                             </FormSection>
                         )}
@@ -664,9 +489,7 @@ function StudentInfo({ setPage }) {
                                 <ParentFields
                                     type="father"
                                     formData={formData}
-                                    onChange={
-                                        handleChange
-                                    }
+                                    onChange={handleChange}
                                     defaultPrefix="นาย"
                                 />
                             </FormSection>
@@ -681,9 +504,7 @@ function StudentInfo({ setPage }) {
                                 <ParentFields
                                     type="mother"
                                     formData={formData}
-                                    onChange={
-                                        handleChange
-                                    }
+                                    onChange={handleChange}
                                     defaultPrefix="นาง"
                                 />
                             </FormSection>
@@ -695,130 +516,62 @@ function StudentInfo({ setPage }) {
                                 title="ข้อมูลผู้ปกครอง"
                                 subtitle="กรอกกรณีผู้ปกครองไม่ใช่บิดาหรือมารดา หรือเป็นผู้ดูแลหลัก"
                             >
-                                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     <SelectInput
                                         label="ความสัมพันธ์กับนักศึกษา"
                                         name="guardianRelation"
-                                        value={
-                                            formData.guardianRelation
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.guardianRelation}
+                                        onChange={handleChange}
                                         options={[
-                                            {
-                                                value: "",
-                                                label: "เลือกความสัมพันธ์",
-                                            },
-                                            {
-                                                value: "บิดา",
-                                                label: "บิดา",
-                                            },
-                                            {
-                                                value: "มารดา",
-                                                label: "มารดา",
-                                            },
-                                            {
-                                                value: "ปู่",
-                                                label: "ปู่",
-                                            },
-                                            {
-                                                value: "ย่า",
-                                                label: "ย่า",
-                                            },
-                                            {
-                                                value: "ตา",
-                                                label: "ตา",
-                                            },
-                                            {
-                                                value: "ยาย",
-                                                label: "ยาย",
-                                            },
-                                            {
-                                                value: "ลุง",
-                                                label: "ลุง",
-                                            },
-                                            {
-                                                value: "ป้า",
-                                                label: "ป้า",
-                                            },
-                                            {
-                                                value: "น้า",
-                                                label: "น้า",
-                                            },
-                                            {
-                                                value: "อา",
-                                                label: "อา",
-                                            },
-                                            {
-                                                value: "อื่น ๆ",
-                                                label: "อื่น ๆ",
-                                            },
+                                            { value: "", label: "เลือกความสัมพันธ์" },
+                                            { value: "บิดา", label: "บิดา" },
+                                            { value: "มารดา", label: "มารดา" },
+                                            { value: "ปู่", label: "ปู่" },
+                                            { value: "ย่า", label: "ย่า" },
+                                            { value: "ตา", label: "ตา" },
+                                            { value: "ยาย", label: "ยาย" },
+                                            { value: "ลุง", label: "ลุง" },
+                                            { value: "ป้า", label: "ป้า" },
+                                            { value: "น้า", label: "น้า" },
+                                            { value: "อา", label: "อา" },
+                                            { value: "อื่น ๆ", label: "อื่น ๆ" },
                                         ]}
                                     />
 
                                     <SelectInput
                                         label="คำนำหน้าชื่อ"
                                         name="guardianPrefix"
-                                        value={
-                                            formData.guardianPrefix
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.guardianPrefix}
+                                        onChange={handleChange}
                                         options={[
-                                            {
-                                                value: "",
-                                                label: "เลือกคำนำหน้าชื่อ",
-                                            },
-                                            {
-                                                value: "นาย",
-                                                label: "นาย",
-                                            },
-                                            {
-                                                value: "นาง",
-                                                label: "นาง",
-                                            },
-                                            {
-                                                value: "นางสาว",
-                                                label: "นางสาว",
-                                            },
+                                            { value: "", label: "เลือกคำนำหน้าชื่อ" },
+                                            { value: "นาย", label: "นาย" },
+                                            { value: "นาง", label: "นาง" },
+                                            { value: "นางสาว", label: "นางสาว" },
                                         ]}
                                     />
 
                                     <Input
                                         label="ชื่อ"
                                         name="guardianFirstName"
-                                        value={
-                                            formData.guardianFirstName
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.guardianFirstName}
+                                        onChange={handleChange}
                                         placeholder="กรอกชื่อผู้ปกครอง"
                                     />
 
                                     <Input
                                         label="นามสกุล"
                                         name="guardianLastName"
-                                        value={
-                                            formData.guardianLastName
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.guardianLastName}
+                                        onChange={handleChange}
                                         placeholder="กรอกนามสกุลผู้ปกครอง"
                                     />
 
                                     <Input
                                         label="เลขประจำตัวประชาชน"
                                         name="guardianCitizenId"
-                                        value={
-                                            formData.guardianCitizenId
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.guardianCitizenId}
+                                        onChange={handleChange}
                                         placeholder="เลขประจำตัวประชาชน 13 หลัก"
                                         maxLength={13}
                                         inputMode="numeric"
@@ -827,12 +580,8 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="อาชีพ"
                                         name="guardianOccupation"
-                                        value={
-                                            formData.guardianOccupation
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.guardianOccupation}
+                                        onChange={handleChange}
                                         placeholder="ระบุอาชีพ"
                                     />
 
@@ -841,24 +590,17 @@ function StudentInfo({ setPage }) {
                                         name="guardianMonthlyIncome"
                                         type="number"
                                         min="0"
-                                        value={
-                                            formData.guardianMonthlyIncome
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.guardianMonthlyIncome}
+                                        onChange={handleChange}
                                         placeholder="จำนวนเงิน"
+                                        suffix="บาท"
                                     />
 
                                     <Input
                                         label="หมายเลขโทรศัพท์"
                                         name="guardianPhone"
-                                        value={
-                                            formData.guardianPhone
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.guardianPhone}
+                                        onChange={handleChange}
                                         placeholder="08XXXXXXXX"
                                         inputMode="tel"
                                     />
@@ -872,18 +614,14 @@ function StudentInfo({ setPage }) {
                                 title="ข้อมูลครอบครัว"
                                 subtitle="ข้อมูลรายได้และจำนวนสมาชิกภายในครอบครัว"
                             >
-                                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                     <Input
                                         label="รายได้รวมของครอบครัวต่อเดือน"
                                         name="totalFamilyIncome"
                                         type="number"
                                         min="0"
-                                        value={
-                                            formData.totalFamilyIncome
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.totalFamilyIncome}
+                                        onChange={handleChange}
                                         placeholder="จำนวนเงิน"
                                         suffix="บาท"
                                     />
@@ -893,12 +631,8 @@ function StudentInfo({ setPage }) {
                                         name="numberOfFamilyMembers"
                                         type="number"
                                         min="1"
-                                        value={
-                                            formData.numberOfFamilyMembers
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.numberOfFamilyMembers}
+                                        onChange={handleChange}
                                         placeholder="จำนวนสมาชิก"
                                         suffix="คน"
                                     />
@@ -908,12 +642,8 @@ function StudentInfo({ setPage }) {
                                         name="numberOfStudyingMembers"
                                         type="number"
                                         min="0"
-                                        value={
-                                            formData.numberOfStudyingMembers
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.numberOfStudyingMembers}
+                                        onChange={handleChange}
                                         placeholder="จำนวนสมาชิก"
                                         suffix="คน"
                                     />
@@ -927,48 +657,31 @@ function StudentInfo({ setPage }) {
                                 title="ข้อมูลการกู้ยืม"
                                 subtitle="ข้อมูลที่ใช้กำหนดเงื่อนไขการคัดกรองและรายการเอกสาร"
                             >
-                                <div className="grid gap-5 md:grid-cols-2">
+                                <div className="grid gap-4 md:grid-cols-2">
                                     <SelectInput
                                         label="ประเภทผู้กู้"
                                         required
                                         name="loanTypeCode"
-                                        value={
-                                            formData.loanTypeCode
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
+                                        value={formData.loanTypeCode}
+                                        onChange={handleChange}
                                         options={[
-                                            {
-                                                value: "NEW",
-                                                label: "ผู้กู้รายใหม่",
-                                            },
-                                            {
-                                                value:
-                                                    "CONTINUING_SPECIAL",
-                                                label: "ผู้กู้ต่อเนื่องกรณีพิเศษ",
-                                            },
-                                            {
-                                                value:
-                                                    "CONTINUING_YEAR",
-                                                label: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
-                                            },
+                                            { value: "NEW", label: "ผู้กู้รายใหม่" },
+                                            { value: "CONTINUING_SPECIAL", label: "ผู้กู้ต่อเนื่องกรณีพิเศษ" },
+                                            { value: "CONTINUING_YEAR", label: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี" },
                                         ]}
                                     />
 
-                                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                                        <p className="text-sm font-black text-blue-700">
+                                    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                                        <p className="text-xs font-black text-blue-700">
                                             ประเภทที่เลือก
                                         </p>
 
-                                        <p className="mt-2 font-black text-[#07116f]">
-                                            {loanTypeLabels[
-                                                formData.loanTypeCode
-                                            ] ||
+                                        <p className="mt-1 text-sm font-black text-[#07116f]">
+                                            {loanTypeLabels[formData.loanTypeCode] ||
                                                 "ยังไม่ได้เลือกประเภทผู้กู้"}
                                         </p>
 
-                                        <p className="mt-2 text-sm leading-6 text-gray-500">
+                                        <p className="mt-1 text-xs leading-5 text-gray-500">
                                             ระบบจะคำนวณรายการเอกสารตามประเภทผู้กู้
                                             ภาคการศึกษา และอายุของนักศึกษา
                                         </p>
@@ -979,18 +692,15 @@ function StudentInfo({ setPage }) {
 
                         {message && (
                             <div
-                                className={`rounded-2xl border p-5 font-black ${messageType ===
-                                    "success"
-                                    ? "border-green-200 bg-green-50 text-green-700"
-                                    : "border-red-200 bg-red-50 text-red-700"
-                                    }`}
+                                className={`rounded-xl border px-4 py-3 text-sm font-black ${
+                                    messageType === "success"
+                                        ? "border-green-200 bg-green-50 text-green-700"
+                                        : "border-red-200 bg-red-50 text-red-700"
+                                }`}
                             >
-                                <div className="flex items-center gap-3">
-                                    <span className="text-2xl">
-                                        {messageType ===
-                                            "success"
-                                            ? "✅"
-                                            : "⚠️"}
+                                <div className="flex items-center gap-2.5">
+                                    <span className="text-lg">
+                                        {messageType === "success" ? "✅" : "⚠️"}
                                     </span>
 
                                     <p>{message}</p>
@@ -998,17 +708,14 @@ function StudentInfo({ setPage }) {
                             </div>
                         )}
 
-                        <div className="sticky bottom-4 z-20 rounded-[24px] border border-gray-100 bg-white/95 p-4 shadow-xl backdrop-blur">
+                        {/* แถบปุ่มด้านล่าง */}
+                        <div className="sticky bottom-4 z-20 rounded-2xl border border-gray-100 bg-white/95 p-3 shadow-lg backdrop-blur">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex gap-3">
+                                <div className="flex gap-2">
                                     <button
                                         type="button"
-                                        onClick={() =>
-                                            setPage(
-                                                "studentProfiles"
-                                            )
-                                        }
-                                        className="h-14 rounded-2xl border border-gray-200 bg-white px-6 font-black text-gray-700 transition hover:bg-gray-50"
+                                        onClick={() => setPage("studentProfiles")}
+                                        className="h-11 rounded-xl border border-gray-200 bg-white px-5 text-sm font-black text-gray-700 transition hover:bg-gray-50"
                                     >
                                         ยกเลิก
                                     </button>
@@ -1021,24 +728,25 @@ function StudentInfo({ setPage }) {
                                                 Math.max(current - 1, 0)
                                             )
                                         }
-                                        className="h-14 rounded-2xl border border-gray-200 bg-white px-6 font-black text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="h-11 rounded-xl border border-gray-200 bg-white px-5 text-sm font-black text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                         ← ก่อนหน้า
                                     </button>
                                 </div>
+
+                                <span className="hidden text-xs font-bold text-gray-400 sm:block">
+                                    {activeSection + 1} / {sections.length}
+                                </span>
 
                                 {activeSection < sections.length - 1 ? (
                                     <button
                                         type="button"
                                         onClick={() =>
                                             setActiveSection((current) =>
-                                                Math.min(
-                                                    current + 1,
-                                                    sections.length - 1
-                                                )
+                                                Math.min(current + 1, sections.length - 1)
                                             )
                                         }
-                                        className="h-14 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-10 font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+                                        className="h-11 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-7 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
                                     >
                                         ถัดไป →
                                     </button>
@@ -1047,10 +755,10 @@ function StudentInfo({ setPage }) {
                                         type="button"
                                         onClick={() =>
                                             handleSubmit({
-                                                preventDefault: () => { },
+                                                preventDefault: () => {},
                                             })
                                         }
-                                        className="h-14 rounded-2xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-10 font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+                                        className="h-11 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-7 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
                                     >
                                         💾 บันทึกข้อมูลนักศึกษา
                                     </button>
@@ -1064,49 +772,28 @@ function StudentInfo({ setPage }) {
     );
 }
 
-function ParentFields({
-    type,
-    formData,
-    onChange,
-    defaultPrefix,
-}) {
+function ParentFields({ type, formData, onChange, defaultPrefix }) {
     const prefixName = `${type}Prefix`;
     const firstName = `${type}FirstName`;
     const lastName = `${type}LastName`;
     const citizenId = `${type}CitizenId`;
     const occupation = `${type}Occupation`;
-    const monthlyIncome =
-        `${type}MonthlyIncome`;
+    const monthlyIncome = `${type}MonthlyIncome`;
     const phone = `${type}Phone`;
     const status = `${type}Status`;
 
     return (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <SelectInput
                 label="คำนำหน้าชื่อ"
                 name={prefixName}
-                value={
-                    formData[prefixName] ||
-                    defaultPrefix
-                }
+                value={formData[prefixName] || defaultPrefix}
                 onChange={onChange}
                 options={[
-                    {
-                        value: "",
-                        label: "เลือกคำนำหน้าชื่อ",
-                    },
-                    {
-                        value: "นาย",
-                        label: "นาย",
-                    },
-                    {
-                        value: "นาง",
-                        label: "นาง",
-                    },
-                    {
-                        value: "นางสาว",
-                        label: "นางสาว",
-                    },
+                    { value: "", label: "เลือกคำนำหน้าชื่อ" },
+                    { value: "นาย", label: "นาย" },
+                    { value: "นาง", label: "นาง" },
+                    { value: "นางสาว", label: "นางสาว" },
                 ]}
             />
 
@@ -1139,9 +826,7 @@ function ParentFields({
             <Input
                 label="อาชีพ"
                 name={occupation}
-                value={
-                    formData[occupation]
-                }
+                value={formData[occupation]}
                 onChange={onChange}
                 placeholder="ระบุอาชีพ"
             />
@@ -1151,9 +836,7 @@ function ParentFields({
                 name={monthlyIncome}
                 type="number"
                 min="0"
-                value={
-                    formData[monthlyIncome]
-                }
+                value={formData[monthlyIncome]}
                 onChange={onChange}
                 placeholder="จำนวนเงิน"
                 suffix="บาท"
@@ -1174,57 +857,34 @@ function ParentFields({
                 value={formData[status]}
                 onChange={onChange}
                 options={[
-                    {
-                        value: "",
-                        label: "เลือกสถานภาพ",
-                    },
-                    {
-                        value: "มีชีวิตอยู่",
-                        label: "มีชีวิตอยู่",
-                    },
-                    {
-                        value: "เสียชีวิต",
-                        label: "เสียชีวิต",
-                    },
-                    {
-                        value: "ไม่ทราบสถานภาพ",
-                        label: "ไม่ทราบสถานภาพ",
-                    },
+                    { value: "", label: "เลือกสถานภาพ" },
+                    { value: "มีชีวิตอยู่", label: "มีชีวิตอยู่" },
+                    { value: "เสียชีวิต", label: "เสียชีวิต" },
+                    { value: "ไม่ทราบสถานภาพ", label: "ไม่ทราบสถานภาพ" },
                 ]}
             />
         </div>
     );
 }
 
-function FormSection({
-    icon,
-    title,
-    subtitle,
-    children,
-}) {
+function FormSection({ icon, title, subtitle, children }) {
     return (
-        <section className="overflow-hidden rounded-[28px] bg-white shadow-sm">
-            <div className="bg-[#07116f] px-6 py-5 text-white lg:px-8">
-                <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-2xl">
+        <section className="flex flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-sm">
+            <div className="bg-[#07116f] px-5 py-4 text-white lg:px-6">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-xl">
                         {icon}
                     </div>
 
                     <div>
-                        <h2 className="text-xl font-black md:text-2xl">
-                            {title}
-                        </h2>
+                        <h2 className="text-base font-black md:text-lg">{title}</h2>
 
-                        <p className="mt-1 text-sm text-blue-100">
-                            {subtitle}
-                        </p>
+                        <p className="mt-0.5 text-xs text-blue-100">{subtitle}</p>
                     </div>
                 </div>
             </div>
 
-            <div className="p-6 lg:p-8">
-                {children}
-            </div>
+            <div className="flex-1 p-5 lg:p-6">{children}</div>
         </section>
     );
 }
@@ -1242,17 +902,13 @@ function Input({
 }) {
     return (
         <label className="block min-w-0">
-            <span className="text-sm font-black text-[#07116f]">
+            <span className="text-xs font-black text-[#07116f] sm:text-sm">
                 {label}
 
-                {required && (
-                    <span className="ml-1 text-red-500">
-                        *
-                    </span>
-                )}
+                {required && <span className="ml-1 text-red-500">*</span>}
             </span>
 
-            <div className="relative mt-2">
+            <div className="relative mt-1.5">
                 <input
                     name={name}
                     type={type}
@@ -1260,15 +916,14 @@ function Input({
                     onChange={onChange}
                     placeholder={placeholder}
                     required={required}
-                    className={`h-13 w-full rounded-xl border border-gray-200 bg-[#f8fbff] px-4 font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 ${suffix
-                        ? "pr-16"
-                        : ""
-                        }`}
+                    className={`h-11 w-full rounded-xl border border-gray-200 bg-[#f8fbff] px-3.5 text-sm font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${
+                        suffix ? "pr-14" : ""
+                    }`}
                     {...inputProps}
                 />
 
                 {suffix && (
-                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">
+                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
                         {suffix}
                     </span>
                 )}
@@ -1277,45 +932,31 @@ function Input({
     );
 }
 
-function SelectInput({
-    label,
-    name,
-    value,
-    onChange,
-    options,
-    required = false,
-}) {
+function SelectInput({ label, name, value, onChange, options, required = false }) {
     return (
         <label className="block min-w-0">
-            <span className="text-sm font-black text-[#07116f]">
+            <span className="text-xs font-black text-[#07116f] sm:text-sm">
                 {label}
 
-                {required && (
-                    <span className="ml-1 text-red-500">
-                        *
-                    </span>
-                )}
+                {required && <span className="ml-1 text-red-500">*</span>}
             </span>
 
-            <div className="relative mt-2">
+            <div className="relative mt-1.5">
                 <select
                     name={name}
                     value={value ?? ""}
                     onChange={onChange}
                     required={required}
-                    className="h-13 w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-[#f8fbff] px-4 pr-10 font-semibold text-gray-800 outline-none transition hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                    className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-[#f8fbff] px-3.5 pr-9 text-sm font-semibold text-gray-800 outline-none transition hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                 >
                     {options.map((option) => (
-                        <option
-                            key={option.value}
-                            value={option.value}
-                        >
+                        <option key={option.value} value={option.value}>
                             {option.label}
                         </option>
                     ))}
                 </select>
 
-                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[#07116f]">
+                <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-[#07116f]">
                     ▼
                 </span>
             </div>
@@ -1323,24 +964,13 @@ function SelectInput({
     );
 }
 
-function Textarea({
-    label,
-    name,
-    value,
-    onChange,
-    required = false,
-    placeholder = "",
-}) {
+function Textarea({ label, name, value, onChange, required = false, placeholder = "" }) {
     return (
         <label className="block">
-            <span className="text-sm font-black text-[#07116f]">
+            <span className="text-xs font-black text-[#07116f] sm:text-sm">
                 {label}
 
-                {required && (
-                    <span className="ml-1 text-red-500">
-                        *
-                    </span>
-                )}
+                {required && <span className="ml-1 text-red-500">*</span>}
             </span>
 
             <textarea
@@ -1349,8 +979,8 @@ function Textarea({
                 onChange={onChange}
                 required={required}
                 placeholder={placeholder}
-                rows={4}
-                className="mt-2 w-full resize-y rounded-xl border border-gray-200 bg-[#f8fbff] px-4 py-3 font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                rows={3}
+                className="mt-1.5 w-full resize-y rounded-xl border border-gray-200 bg-[#f8fbff] px-3.5 py-2.5 text-sm font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
             />
         </label>
     );
