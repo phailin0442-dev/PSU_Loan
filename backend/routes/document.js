@@ -294,18 +294,17 @@ router.post(
                 ? "APPROVED"
                 : "PENDING";
 
+            // แก้บัก: เดิมเขียน review_status เป็น 'PENDING' ตายตัวใน SQL (9 placeholder)
+            // แต่ส่งค่าเข้าไป 10 ตัว (มี initialReviewStatus เพิ่ม) ทำให้ error
+            // "bind message supplies 10 parameters, but prepared statement requires 9"
+            // ตอนนี้ review_status = $9 และ uploaded_by = $10 ให้ตรงกับอาร์เรย์ด้านล่าง
             const insertResult = await client.query(
                 `INSERT INTO psu_loan.application_documents
                     (application_id, requirement_id, original_file_name, stored_file_name,
                      file_path, mime_type, file_size_bytes, version_no, is_current,
                      review_status, uploaded_by)
-<<<<<<< HEAD
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10)
-                 RETURNING document_id, version_no, review_status, uploaded_at`,
-=======
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, 'PENDING', $9)
                  RETURNING document_id, stored_file_name, version_no, review_status, uploaded_at`,
->>>>>>> origin/Sameme
                 [
                     applicationId,
                     requirementId,
@@ -351,7 +350,7 @@ router.post(
                 },
             });
         } catch (error) {
-            await client.query("ROLLBACK").catch(() => {});
+            await client.query("ROLLBACK").catch(() => { });
             console.error("POST /api/student/:applicationId/documents error:", error);
 
             return res.status(500).json({
