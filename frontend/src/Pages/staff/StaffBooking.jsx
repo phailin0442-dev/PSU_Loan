@@ -23,12 +23,7 @@ const DEFAULT_LOCATION = "กองพัฒนานักศึกษา อ�
 const DEFAULT_DETAIL = "กรุณานำเอกสารฉบับจริงมายื่นตามวันและเวลาที่จอง";
 const SLOT_MINUTES = 30;
 
-const DEFAULT_SLOTS = [
-  { start: "09:00", end: "09:30" },
-  { start: "09:30", end: "10:00" },
-  { start: "10:00", end: "10:30" },
-  { start: "13:00", end: "13:30" },
-];
+
 
 // ฟอนต์สำหรับตัวเลขเท่านั้น
 const NUM_FONT_CSS = `
@@ -41,15 +36,7 @@ const NUM_FONT_CSS = `
 let uid = 0;
 const newId = () => `s${Date.now().toString(36)}${(uid++).toString(36)}`;
 
-const makeSlots = (capacity = 15) =>
-  DEFAULT_SLOTS.map((s) => ({
-    id: newId(),
-    slotId: null,
-    booked: 0,
-    ...s,
-    capacity,
-    enabled: true,
-  }));
+
 
 // วันที่แบบเวลาท้องถิ่น (ไม่ใช้ toISOString เพราะเป็น UTC ทำให้วันเลื่อนในไทย)
 function toDateId(date) {
@@ -88,7 +75,7 @@ function newDay(id) {
     open: true,
     location: DEFAULT_LOCATION,
     detail: DEFAULT_DETAIL,
-    slots: makeSlots(),
+    slots: [],
     saved: false,
   };
 }
@@ -616,14 +603,16 @@ function StaffBooking() {
 
   const overview = useMemo(() => {
     const list = [...summaries.entries()];
-    const openDays = list.filter(([, s]) => s.status !== "closed");
+        const openDays = list.filter(
+      ([, s]) => s.status !== "closed" && s.active > 0,
+    );
     return {
       openDays: openDays.length,
       totalSlots: openDays.reduce((t, [, s]) => t + s.active, 0),
       totalQuota: openDays.reduce((t, [, s]) => t + s.quota, 0),
       totalBooked: list.reduce((t, [, s]) => t + s.booked, 0),
-      problems: list
-        .filter(([, s]) => s.status === "error" || s.status === "empty")
+            problems: list
+        .filter(([, s]) => s.status === "error")
         .map(([id, s]) => ({ id, status: s.status })),
     };
   }, [summaries]);
@@ -1059,24 +1048,20 @@ function StaffBooking() {
                         {formatDate(day.id, { day: "numeric", month: "short" })}
                       </span>
 
-                      <span
+                                            <span
                         className={`mt-1.5 block text-xs ${
                           selected
                             ? "text-blue-100"
                             : sum.status === "error"
                               ? "font-bold text-rose-600"
-                              : sum.status === "empty"
-                                ? "font-bold text-amber-700"
-                                : "text-slate-500"
+                              : "text-slate-500"
                         }`}
                       >
                         {sum.status === "closed"
                           ? "ปิดรับ"
                           : sum.status === "error"
                             ? "มีจุดต้องแก้"
-                            : sum.status === "empty"
-                              ? "ยังไม่มีรอบ"
-                              : `${sum.active} รอบ / ${sum.quota} คน`}
+                            : `${sum.active} รอบ / ${sum.quota} คน`}
                       </span>
                     </button>
                   );
