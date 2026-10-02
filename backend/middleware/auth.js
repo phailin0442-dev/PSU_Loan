@@ -149,7 +149,7 @@ router.post("/register", async (req, res) => {
 */
 router.post("/login", async (req, res) => {
     try {
-        const { identifier, password, role } = req.body;
+        const { identifier, password } = req.body;
 
         if (!identifier || !password) {
             return res.status(400).json({
@@ -158,22 +158,33 @@ router.post("/login", async (req, res) => {
             });
         }
 
-        const normalizedRole = role === "staff" ? "STAFF" : "STUDENT";
         const normalizedIdentifier = identifier.trim().toLowerCase();
 
-        // หาได้ทั้งจาก email หรือรหัสนักศึกษา/รหัสพนักงาน
-        const query =
-            normalizedRole === "STUDENT"
-                ? `SELECT u.user_id, u.password_hash, u.is_active,
-                          sp.student_code, CONCAT_WS(' ', sp.prefix, sp.first_name, sp.last_name) AS full_name
-                   FROM psu_loan.users u
-                   JOIN psu_loan.student_profiles sp ON sp.student_id = u.user_id
-                   WHERE LOWER(u.email) = $1 OR LOWER(sp.student_code) = $1`
-                : `SELECT u.user_id, u.password_hash, u.is_active,
-                          stp.employee_code AS student_code, CONCAT_WS(' ', stp.prefix, stp.first_name, stp.last_name) AS full_name
-                   FROM psu_loan.users u
-                   JOIN psu_loan.staff_profiles stp ON stp.staff_id = u.user_id
-                   WHERE LOWER(u.email) = $1 OR LOWER(stp.employee_code) = $1`;
+        const query = `
+            SELECT
+                u.user_id,
+                u.password_hash,
+                u.is_active,
+                r.role_code,
+                CASE
+                    WHEN r.role_code = 'STAFF'
+                        THEN stp.employee_code
+                    ELSE sp.student_code
+                END AS user_code,
+                CASE
+                    WHEN r.role_code = 'STAFF'
+                        THEN CONCAT_WS(' ', stp.prefix, stp.first_name, stp.last_name)
+                    ELSE CONCAT_WS(' ', sp.prefix, sp.first_name, sp.last_name)
+                END AS full_name
+            FROM psu_loan.users u
+            JOIN psu_loan.roles r ON r.role_id = u.role_id
+            LEFT JOIN psu_loan.student_profiles sp ON sp.student_id = u.user_id
+            LEFT JOIN psu_loan.staff_profiles stp ON stp.staff_id = u.user_id
+            WHERE
+                LOWER(u.email) = $1
+                OR LOWER(sp.student_code) = $1
+                OR LOWER(stp.employee_code) = $1
+        `;
 
         const result = await pool.query(query, [normalizedIdentifier]);
 
@@ -205,14 +216,13 @@ router.post("/login", async (req, res) => {
             });
         }
 
+        const role = user.role_code;
+
         const token = jwt.sign(
             {
                 userId: Number(user.user_id),
-                role: normalizedRole,
-                studentId:
-                    normalizedRole === "STUDENT"
-                        ? Number(user.user_id)
-                        : undefined,
+                role,
+                studentId: role === "STUDENT" ? Number(user.user_id) : undefined,
             },
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN }
@@ -225,9 +235,9 @@ router.post("/login", async (req, res) => {
                 token,
                 user: {
                     userId: Number(user.user_id),
-                    role: normalizedRole,
+                    role,
                     fullName: user.full_name,
-                    code: user.student_code,
+                    code: user.user_code,
                 },
             },
         });

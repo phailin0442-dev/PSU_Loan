@@ -158,24 +158,30 @@ router.post("/login", async (req, res) => {
             });
         }
 
-        const normalizedRole = role === "staff" ? "STAFF" : "STUDENT";
         const normalizedIdentifier = identifier.trim().toLowerCase();
 
-        // หาได้ทั้งจาก email หรือรหัสนักศึกษา/รหัสพนักงาน
-        const query =
-            normalizedRole === "STUDENT"
-                ? `SELECT u.user_id, u.password_hash, u.is_active,
-                          sp.student_code, CONCAT_WS(' ', sp.prefix, sp.first_name, sp.last_name) AS full_name
-                   FROM psu_loan.users u
-                   JOIN psu_loan.student_profiles sp ON sp.student_id = u.user_id
-                   WHERE LOWER(u.email) = $1 OR LOWER(sp.student_code) = $1`
-                : `SELECT u.user_id, u.password_hash, u.is_active,
-                          stp.employee_code AS student_code, CONCAT_WS(' ', stp.prefix, stp.first_name, stp.last_name) AS full_name
-                   FROM psu_loan.users u
-                   JOIN psu_loan.staff_profiles stp ON stp.staff_id = u.user_id
-                   WHERE LOWER(u.email) = $1 OR LOWER(stp.employee_code) = $1`;
+const query = `
+    SELECT
+        u.user_id,
+        u.password_hash,
+        u.is_active,
+        r.role_code,
+        COALESCE(sp.student_code, stp.employee_code) AS user_code,
+        COALESCE(
+            CONCAT_WS(' ', sp.prefix, sp.first_name, sp.last_name),
+            CONCAT_WS(' ', stp.prefix, stp.first_name, stp.last_name)
+        ) AS full_name
+    FROM psu_loan.users u
+    JOIN psu_loan.roles r ON r.role_id = u.role_id
+    LEFT JOIN psu_loan.student_profiles sp ON sp.student_id = u.user_id
+    LEFT JOIN psu_loan.staff_profiles stp ON stp.staff_id = u.user_id
+    WHERE
+        LOWER(u.email) = $1
+        OR LOWER(sp.student_code) = $1
+        OR LOWER(stp.employee_code) = $1
+`;
 
-        const result = await pool.query(query, [normalizedIdentifier]);
+const result = await pool.query(query, [normalizedIdentifier]);
 
         if (result.rowCount === 0) {
             return res.status(401).json({
@@ -206,15 +212,14 @@ router.post("/login", async (req, res) => {
         }
 
         const token = jwt.sign(
-            {
-                userId: user.user_id,
-                role: normalizedRole,
-                studentId:
-                    normalizedRole === "STUDENT" ? user.user_id : undefined,
-            },
-            JWT_SECRET,
-            { expiresIn: JWT_EXPIRES_IN }
-        );
+    {
+        userId: user.user_id,
+        role: user.role_code,
+        studentId: user.role_code === "STUDENT" ? user.user_id : undefined,
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+);
 
         return res.status(200).json({
             success: true,
@@ -223,9 +228,9 @@ router.post("/login", async (req, res) => {
                 token,
                 user: {
                     userId: user.user_id,
-                    role: normalizedRole,
+                    role: user.role_code,
                     fullName: user.full_name,
-                    code: user.student_code,
+                    code: user.user_code,
                 },
             },
         });

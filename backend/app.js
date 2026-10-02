@@ -2,25 +2,30 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 
+
 const pool = require("./config/db");
 const homeRoutes = require("./routes/home");
 const authRoutes = require("./routes/auth");
 const studentRoutes = require("./routes/student");
 const staffRoutes = require("./routes/staff");
 const documentRoutes = require("./routes/document");
+//const queueSlotRoutes = require("./routes/queueSlots"); // เจ้าหน้าที่จัดการรอบเวลายื่นเอกสาร
+
+
+
 
 
 const app = express();
 
-app.use(
-    cors({
-        origin: "http://localhost:5173",
-        credentials: true,
-    })
-);
+
+app.use(cors({
+    origin: "http://localhost:5173",
+}))
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+
 
 app.get("/api/health", (req, res) => {
     res.status(200).json({
@@ -56,6 +61,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/student", studentRoutes);
 app.use("/api/student", documentRoutes);
 app.use("/api/staff", staffRoutes);
+//app.use("/api/queue-slots", queueSlotRoutes)
 
 app.use(
     "/uploads",
@@ -78,6 +84,10 @@ app.use((error, req, res, next) => {
             error.message ||
             "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์",
     });
+});
+
+app.listen(5000, () => {
+    console.log("Backend running at http://localhost:5000");
 });
 
 module.exports = app;

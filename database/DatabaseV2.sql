@@ -1031,5 +1031,3 @@ SELECT
 FROM information_schema.columns
 WHERE table_name = 'application_documents'
 ORDER BY ordinal_position;
-
-

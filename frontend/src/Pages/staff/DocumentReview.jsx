@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import {
     getBorrowerTypeLabel,
@@ -69,6 +69,8 @@ function DocumentReview({ student, setPage, onSave }) {
     };
 
     useEffect(() => {
+        // โหลดข้อมูลจาก API เมื่อเปลี่ยนคำร้อง — เป็นกรณีที่ใช้ effect ได้ถูกต้อง
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadDetail();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [applicationId]);
@@ -88,45 +90,19 @@ function DocumentReview({ student, setPage, onSave }) {
         activeRow?.documentCode === "GPAX_EVIDENCE" ||
         activeRow?.documentCode === "VOLUNTEER_EVIDENCE";
 
-    useEffect(() => {
+    // รีเซ็ตหมายเหตุ/ประวัติเมื่อเปลี่ยนเอกสาร — ทำระหว่าง render แทน useEffect
+    // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+    const [prevRequirementId, setPrevRequirementId] = useState(
+        activeRow?.requirementId
+    );
+
+    if (prevRequirementId !== activeRow?.requirementId) {
+        setPrevRequirementId(activeRow?.requirementId);
         setNoteDraft(activeRow?.note || "");
         setActionError("");
         setShowHistory(false);
         setHistory(null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeRow?.requirementId]);
-
-    const summary = useMemo(() => {
-        return requiredRows.reduce(
-            (result, row) => {
-                if (!row.id) {
-                    result.missing += 1;
-                    return result;
-                }
-
-                // เอกสารหลักฐาน GPAX/ชั่วโมงจิตอาสา ไม่ต้องนับรวมในตัวเลข
-                // สรุปตรวจสอบ เพราะระบบตัดสินอัตโนมัติไปแล้ว ไม่ใช่รายการ
-                // ที่ "รอเจ้าหน้าที่ตรวจ" จริงๆ
-                if (
-                    row.documentCode === "GPAX_EVIDENCE" ||
-                    row.documentCode === "VOLUNTEER_EVIDENCE"
-                ) {
-                    return result;
-                }
-
-                if (row.status === "APPROVED") {
-                    result.approved += 1;
-                } else if (row.status === "REVISION_REQUIRED") {
-                    result.rejected += 1;
-                } else {
-                    result.pending += 1;
-                }
-
-                return result;
-            },
-            { approved: 0, rejected: 0, pending: 0, missing: 0 }
-        );
-    }, [requiredRows]);
+    }
 
     const validateStaffId = () => {
         const parsed = Number(staffId);
@@ -139,6 +115,7 @@ function DocumentReview({ student, setPage, onSave }) {
         return parsed;
     };
 
+    //ส่วนที่ตีกลับไปหานักศึกษา
     const handleReviewAction = async (statusLabel) => {
         if (!activeRow?.id) return;
 
@@ -155,6 +132,7 @@ function DocumentReview({ student, setPage, onSave }) {
         setActionError("");
         setSavingAction(true);
 
+        //ยิงreviewDocument ว่าต้องแก้ไข
         try {
             await reviewDocument(applicationId, activeRow.id, {
                 status: statusLabel,
@@ -593,15 +571,6 @@ function InfoCard({ label, value }) {
         <div className="rounded-2xl bg-gray-50 p-4">
             <p className="text-sm text-gray-400">{label}</p>
             <p className="mt-1 font-black">{value}</p>
-        </div>
-    );
-}
-
-function SummaryBox({ label, value, className }) {
-    return (
-        <div className={`rounded-2xl p-4 text-center ${className}`}>
-            <p className="text-2xl font-black">{value}</p>
-            <p className="mt-1 text-sm font-bold">{label}</p>
         </div>
     );
 }

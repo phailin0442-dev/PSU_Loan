@@ -31,6 +31,13 @@ function fileToDataUrl(file) {
   });
 }
 
+// ขนาด/ระยะที่ใช้ร่วมกันทั้งหน้า (ชุดเดียวกับหน้าข้อมูลของฉัน / แก้ไขข้อมูล)
+const PAGE_MAIN = "w-full px-4 py-6 sm:px-6 lg:px-10 2xl:px-14";
+const PAGE_WRAP = "mx-auto flex w-full max-w-[1440px] flex-col gap-5";
+const CARD = "overflow-hidden rounded-2xl bg-white shadow-sm";
+const PRIMARY_BTN =
+  "h-12 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 text-base font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50";
+
 function Eligibility({ setPage }) {
   const {
     selectedStudent,
@@ -40,15 +47,8 @@ function Eligibility({ setPage }) {
     currentUser,
   } = useApp();
 
-  // เก็บผลลัพธ์ตอนเพิ่งสร้างคำร้องสำเร็จไว้ที่ระดับบนสุดนี้แทนที่จะ
-  // เก็บไว้ใน NewApplicationForm เอง — เพราะพอสร้างสำเร็จ hasOwnApplication
-  // จะเปลี่ยนค่าทันที ทำให้ NewApplicationForm ถูกถอดออกจากหน้าจอไปเลย
-  // (unmount) ก่อนจะทันโชว์ผล ถ้าเก็บ state ไว้แค่ในนั้นจะหายไปด้วย
-  //
-  // หมายเหตุ: ผลลัพธ์ตรงนี้อาจเป็นได้ทั้ง "ผ่าน" และ "ไม่ผ่าน" (GPAX
-  // ไม่ผ่าน) เพราะ GPAX ไม่ผ่านก็ยังต้องสร้างคำร้องจริงที่ backend
-  // (บันทึกเป็น ELIGIBILITY_FAILED) ต่างจากชั่วโมงจิตอาสาที่ถูกกันไว้
-  // ตั้งแต่ฝั่งหน้าเว็บ ไม่ปล่อยให้ยิงไป backend เลยถ้ายังไม่ผ่าน
+  // เก็บผลลัพธ์ตอนเพิ่งสร้างคำร้องสำเร็จไว้ที่ระดับบนสุดนี้ — พอสร้างสำเร็จ
+  // hasOwnApplication จะเปลี่ยนทันที ทำให้ NewApplicationForm ถูก unmount
   const [justCreatedResult, setJustCreatedResult] = useState(null);
 
   const [gpax, setGpax] = useState(selectedStudent?.gpax ?? "");
@@ -58,40 +58,36 @@ function Eligibility({ setPage }) {
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+  // รีเซ็ตฟอร์มเมื่อเปลี่ยนคำร้อง — ทำระหว่าง render แทน useEffect ตามแนวทางของ React
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [prevStudent, setPrevStudent] = useState(selectedStudent);
+  if (prevStudent !== selectedStudent) {
+    setPrevStudent(selectedStudent);
     setGpax(selectedStudent?.gpax ?? "");
     setHours(selectedStudent?.volunteerHours ?? "");
     setGpaxFile(null);
     setHoursFile(null);
     setResult(null);
-  }, [selectedStudent]);
+  }
 
-  // ถ้าคัดกรองผ่านไปแล้วก่อนหน้านี้ (เข้ามาหน้านี้ซ้ำ) ไม่ต้องเด้งอัตโนมัติ
-  // อีกต่อไป (ของเดิมเด้งทันทีโดยไม่รอข้อมูลโหลดเสร็จ เสี่ยงหน้าขาว) —
-  // ให้โชว์แบนเนอร์ + ปุ่มกดไปเองแทน เหมือน pattern เดียวกับตอนสร้างคำร้อง
-  // ใช้ค่าสถานะดิบตรงๆ (PASSED/FAILED/NOT_REQUIRED/PENDING) แม่นยำที่สุด
-  // ไม่ปนกันระหว่าง "ตรวจแล้ว" กับ "ผ่านแล้ว" แบบที่เคยเป็นบั๊กมาก่อน
+  // ใช้ค่าสถานะดิบ (PASSED/FAILED/NOT_REQUIRED/PENDING) ตรงๆ
   const rawEligibilityStatus = selectedStudent?.eligibilityStatus;
-  // ผ่านจริง (PASSED) หรือไม่ต้องตรวจเลย (NOT_REQUIRED เทอม 2) ถือว่า
-  // ไปต่อหน้าอัปโหลดเอกสารได้ทั้งคู่
+  // ผ่านจริง หรือไม่ต้องตรวจ (เทอม 2) ถือว่าไปต่อหน้าอัปโหลดเอกสารได้
   const alreadyPassed =
     rawEligibilityStatus === "PASSED" ||
     rawEligibilityStatus === "NOT_REQUIRED";
-  // ไม่ผ่านเกณฑ์จริงๆ (ต่างจาก "ยังไม่ได้ตรวจ")
   const alreadyFailed = rawEligibilityStatus === "FAILED";
 
   const semesterTwo = Number(selectedStudent?.semester) === 2;
 
-  const minHours =
-    selectedStudent?.loanTypeCode === "NEW" ? 1 : 36;
+  const minHours = selectedStudent?.loanTypeCode === "NEW" ? 1 : 36;
 
   const handleCheck = async () => {
     if (selectedStudent?.periodOpen === false) {
       setResult({
         pass: false,
         errors: [
-          selectedStudent?.periodMessage ||
-          "ยังไม่เปิดให้ยื่นเอกสารในขณะนี้",
+          selectedStudent?.periodMessage || "ยังไม่เปิดให้ยื่นเอกสารในขณะนี้",
         ],
       });
       return;
@@ -236,54 +232,33 @@ function Eligibility({ setPage }) {
     }
 
     return (
-      <main className="w-full overflow-y-auto px-4 py-4 lg:px-6">
-        <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-5 rounded-[28px] bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 py-7 text-white shadow-md">
-            <div className="flex items-center gap-5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-3xl ring-2 ring-white/20">
-                📋
-              </div>
-              <div>
-                <p className="text-sm font-bold text-blue-100">
-                  ขั้นตอนการคัดกรองคุณสมบัติ
-                </p>
-                <h1 className="mt-1 text-2xl font-black leading-tight md:text-3xl">
-                  {currentUser?.fullName || "-"}
-                </h1>
-              </div>
-            </div>
-          </div>
+      <main className={PAGE_MAIN}>
+        <section className={PAGE_WRAP}>
+          <PageHeader subtitle="ขั้นตอนการคัดกรองคุณสมบัติ" title={currentUser?.fullName || "-"} />
 
-          <section className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+          <section className={CARD}>
             <SectionHeader
               icon="✅"
               title="ผ่านการคัดกรองคุณสมบัติแล้ว"
               subtitle="สร้างคำร้องกู้ยืมสำเร็จแล้ว ขั้นตอนถัดไปคืออัปโหลดเอกสาร"
             />
-            <div className="flex flex-col items-center justify-center gap-4 px-6 py-10 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-3xl">
-                ✅
-              </div>
-              <p className="max-w-md text-sm leading-6 text-gray-500">
-                คำร้องนี้ผ่านการคัดกรองคุณสมบัติเบื้องต้นเรียบร้อยแล้ว
-                กดปุ่มด้านล่างเพื่อไปอัปโหลดเอกสารประกอบ
-              </p>
-              <button
-                type="button"
-                onClick={() => setPage("uploadDocuments")}
-                className="h-12 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 font-black text-white shadow-md transition hover:-translate-y-0.5"
-              >
-                ไปหน้าอัปโหลดเอกสาร →
-              </button>
-            </div>
+            <ResultBody
+              icon="✅"
+              tone="green"
+              text="คำร้องนี้ผ่านการคัดกรองคุณสมบัติเบื้องต้นเรียบร้อยแล้ว กดปุ่มด้านล่างเพื่อไปอัปโหลดเอกสารประกอบ"
+              action={
+                <button type="button" onClick={() => setPage("uploadDocuments")} className={PRIMARY_BTN}>
+                  ไปหน้าอัปโหลดเอกสาร →
+                </button>
+              }
+            />
           </section>
         </section>
       </main>
     );
   }
 
-  // ถ้าบัญชีนี้ยังไม่มีคำร้องเลย (เช่นเพิ่ง register ใหม่) ให้ไปหน้า
-  // สร้างคำร้องก่อน
+  // ถ้าบัญชีนี้ยังไม่มีคำร้องเลย ให้ไปหน้าสร้างคำร้องก่อน
   if (!hasOwnApplication) {
     return (
       <NewApplicationForm
@@ -296,204 +271,141 @@ function Eligibility({ setPage }) {
   }
 
   return (
-    <main className="w-full overflow-y-auto px-4 py-4 lg:px-6">
-      <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-        {/* Header ใหญ่ แบบเดียวกับหน้าข้อมูลของฉัน */}
-        <div className="flex flex-wrap items-center justify-between gap-5 rounded-[28px] bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 py-7 text-white shadow-md">
-          <div className="flex items-center gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-3xl ring-2 ring-white/20">
-              📋
-            </div>
-            <div>
-              <p className="text-sm font-bold text-blue-100">
-                ขั้นตอนการคัดกรองคุณสมบัติ
-              </p>
-              <h1 className="mt-1 text-2xl font-black leading-tight md:text-3xl">
-                {selectedStudent?.fullName || "ไม่พบชื่อนักศึกษา"}
-              </h1>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">
-                  ภาคเรียนที่ {selectedStudent?.semester || "-"}
-                </span>
-                <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">
-                  {selectedStudent?.loanTypeName || "-"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <main className={PAGE_MAIN}>
+      <section className={PAGE_WRAP}>
+        <PageHeader
+          subtitle="ขั้นตอนการคัดกรองคุณสมบัติ"
+          title={selectedStudent?.fullName || "ไม่พบชื่อนักศึกษา"}
+          chips={[
+            `ภาคเรียนที่ ${selectedStudent?.semester || "-"}`,
+            selectedStudent?.loanTypeName || "-",
+          ]}
+        />
 
         {/* การ์ดสรุป 4 ใบ */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard
-            icon="🎓"
-            label="ประเภทผู้กู้"
-            value={selectedStudent?.loanTypeName || "-"}
-          />
-          <StatCard
-            icon="📚"
-            label="ภาคการศึกษา"
-            value={`ภาคเรียนที่ ${selectedStudent?.semester || "-"}`}
-          />
-          <StatCard
-            icon="📊"
-            label="เกณฑ์ GPAX"
-            value={semesterTwo ? "ไม่ต้องตรวจ" : "มากกว่า 1.80"}
-          />
+          <StatCard icon="🎓" label="ประเภทผู้กู้" value={selectedStudent?.loanTypeName || "-"} />
+          <StatCard icon="📚" label="ภาคการศึกษา" value={`ภาคเรียนที่ ${selectedStudent?.semester || "-"}`} />
+          <StatCard icon="📊" label="เกณฑ์ GPAX" value={semesterTwo ? "ไม่ต้องตรวจ" : "มากกว่า 1.80"} />
           <StatCard
             icon="🤝"
             label="เกณฑ์จิตอาสา"
             value={
               semesterTwo
                 ? "ไม่ต้องตรวจ"
-                : `มากกว่า${selectedStudent?.loanTypeCode === "NEW" ? "" : "หรือเท่ากับ"
-                } ${minHours} ชั่วโมง`
+                : `มากกว่า${selectedStudent?.loanTypeCode === "NEW" ? "" : "หรือเท่ากับ"} ${minHours} ชั่วโมง`
             }
           />
         </div>
 
         {alreadyPassed ? (
-          <div className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+          <div className={CARD}>
             <SectionHeader
               icon="✅"
               title="ผ่านการคัดกรองคุณสมบัติแล้ว"
               subtitle="สามารถไปขั้นตอนอัปโหลดเอกสารได้เลย"
             />
-            <div className="flex flex-col items-center justify-center gap-4 px-6 py-10 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-3xl">
-                ✅
-              </div>
-              <p className="max-w-md text-sm leading-6 text-gray-500">
-                คำร้องนี้ผ่านการคัดกรองคุณสมบัติเบื้องต้นเรียบร้อยแล้ว
-                กดปุ่มด้านล่างเพื่อไปอัปโหลดเอกสารประกอบ
-              </p>
-              <button
-                type="button"
-                onClick={() => setPage("uploadDocuments")}
-                className="h-12 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 font-black text-white shadow-md transition hover:-translate-y-0.5"
-              >
-                ไปหน้าอัปโหลดเอกสาร →
-              </button>
-            </div>
+            <ResultBody
+              icon="✅"
+              tone="green"
+              text="คำร้องนี้ผ่านการคัดกรองคุณสมบัติเบื้องต้นเรียบร้อยแล้ว กดปุ่มด้านล่างเพื่อไปอัปโหลดเอกสารประกอบ"
+              action={
+                <button type="button" onClick={() => setPage("uploadDocuments")} className={PRIMARY_BTN}>
+                  ไปหน้าอัปโหลดเอกสาร →
+                </button>
+              }
+            />
           </div>
         ) : alreadyFailed ? (
-          <div className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+          <div className={CARD}>
             <SectionHeader
               icon="⚠️"
               title="ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติ"
               subtitle="GPAX หรือชั่วโมงจิตอาสายังไม่ถึงเกณฑ์ที่กำหนด"
             />
-            <div className="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-3xl">
-                ⚠️
-              </div>
-              <p className="max-w-md text-sm leading-6 text-gray-500">
-                คำร้องของภาคการศึกษานี้ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติเบื้องต้น
-                (GPAX: {selectedStudent?.gpax ?? "-"}, ชั่วโมงจิตอาสา:{" "}
-                {selectedStudent?.volunteerHours ?? "-"} ชั่วโมง)
-                กรุณาติดต่อเจ้าหน้าที่หากมีข้อสงสัยเกี่ยวกับผลการคัดกรอง
-              </p>
-            </div>
+            <ResultBody
+              icon="⚠️"
+              tone="red"
+              text={`คำร้องของภาคการศึกษานี้ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติเบื้องต้น (GPAX: ${selectedStudent?.gpax ?? "-"
+                }, ชั่วโมงจิตอาสา: ${selectedStudent?.volunteerHours ?? "-"} ชั่วโมง) กรุณาติดต่อเจ้าหน้าที่หากมีข้อสงสัยเกี่ยวกับผลการคัดกรอง`}
+            />
           </div>
         ) : selectedStudent?.periodOpen === false ? (
-          <div className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+          <div className={CARD}>
             <SectionHeader
               icon="🚫"
               title="ยังไม่เปิดให้ยื่นเอกสาร"
               subtitle="เจ้าหน้าที่ยังไม่เปิดช่วงเวลารับยื่นกู้สำหรับเทอมนี้"
             />
-            <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-3xl">
-                🚫
-              </div>
-              <h2 className="mt-3 text-lg font-black text-red-700">
-                ไม่สามารถคัดกรองได้ เนื่องจากยังไม่เปิดให้ยื่นเอกสาร
-              </h2>
-              <p className="mt-1 max-w-md text-sm leading-6 text-gray-500">
-                {selectedStudent?.periodMessage ||
-                  "กรุณารอประกาศเปิดรับยื่นกู้จากเจ้าหน้าที่"}
-              </p>
-            </div>
+            <ResultBody
+              icon="🚫"
+              tone="red"
+              heading="ไม่สามารถคัดกรองได้ เนื่องจากยังไม่เปิดให้ยื่นเอกสาร"
+              text={selectedStudent?.periodMessage || "กรุณารอประกาศเปิดรับยื่นกู้จากเจ้าหน้าที่"}
+            />
           </div>
         ) : semesterTwo ? (
-          <div className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+          <div className={CARD}>
             <SectionHeader
               icon="✅"
               title="ผลการคัดกรอง"
               subtitle="ภาคเรียนที่ 2 ไม่ต้องตรวจสอบคุณสมบัติ"
             />
-            <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-3xl">
-                ✅
-              </div>
-              <h2 className="mt-3 text-lg font-black text-green-700">
-                ภาคเรียนที่ 2 ไม่ต้องคัดกรอง
-              </h2>
-              <p className="mt-1 max-w-md text-sm leading-6 text-gray-500">
-                ไม่ต้องกรอก GPAX และชั่วโมงจิตอาสา สามารถไปอัปโหลดเอกสารได้ทันที
-              </p>
-              <button
-                type="button"
-                onClick={() => setPage("uploadDocuments")}
-                className="mt-5 h-12 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 font-black text-white shadow-md transition hover:-translate-y-0.5"
-              >
-                ไปหน้าอัปโหลดเอกสาร →
-              </button>
-            </div>
+            <ResultBody
+              icon="✅"
+              tone="green"
+              heading="ภาคเรียนที่ 2 ไม่ต้องคัดกรอง"
+              text="ไม่ต้องกรอก GPAX และชั่วโมงจิตอาสา สามารถไปอัปโหลดเอกสารได้ทันที"
+              action={
+                <button type="button" onClick={() => setPage("uploadDocuments")} className={PRIMARY_BTN}>
+                  ไปหน้าอัปโหลดเอกสาร →
+                </button>
+              }
+            />
           </div>
         ) : (
-          <div className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+          <div className={CARD}>
             <SectionHeader
               icon="📝"
               title="ข้อมูลคัดกรองคุณสมบัติ"
               subtitle="กรอก GPAX และชั่วโมงจิตอาสา พร้อมแนบหลักฐานประกอบ"
             />
 
-            <div className="flex flex-col px-6 py-2 lg:px-8">
-              {/* GPAX */}
-              <ListQualificationRow
+            <div className="grid gap-4 p-5 lg:grid-cols-2 lg:p-8">
+              <CriterionCard
                 number={1}
                 title="เกรดเฉลี่ยสะสม (GPAX)"
+                criteria="ต้องไม่ต่ำกว่า 1.80"
                 value={gpax}
-                onValueChange={setGpax}
-                inputProps={{
-                  type: "number",
-                  step: "0.01",
-                  min: "0",
-                  max: "4",
-                  placeholder: "2.48",
-                }}
+                onChange={setGpax}
+                inputProps={{ step: "0.01", min: "0", max: "4", placeholder: "เช่น 2.48" }}
+                passed={gpax === "" ? null : Number(gpax) >= 1.8}
+                fileLabel="หลักฐานผลการเรียน (ใบแสดงผลการเรียน)"
                 file={gpaxFile}
                 onFileChange={setGpaxFile}
               />
 
-              {/* ชั่วโมงจิตอาสา */}
-              <ListQualificationRow
+              <CriterionCard
                 number={2}
                 title="ชั่วโมงจิตอาสา"
+                criteria={`ต้องไม่น้อยกว่า ${minHours} ชั่วโมง`}
+                unit="ชั่วโมง"
                 value={hours}
-                onValueChange={setHours}
-                inputProps={{
-                  type: "number",
-                  min: "0",
-                  placeholder: String(minHours),
-                }}
+                onChange={setHours}
+                inputProps={{ min: "0", placeholder: `เช่น ${minHours}` }}
+                passed={hours === "" ? null : Number(hours) >= minHours}
+                fileLabel="หลักฐานชั่วโมงจิตอาสา"
                 file={hoursFile}
                 onFileChange={setHoursFile}
               />
             </div>
 
             {result && !result.pass && (
-              <div className="mx-6 mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 lg:mx-8">
-                <p className="text-sm font-black">
-                  กรุณาตรวจสอบข้อมูลต่อไปนี้
-                </p>
+              <div className="mx-5 mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 lg:mx-8">
+                <p className="text-base font-black">กรุณาตรวจสอบข้อมูลต่อไปนี้</p>
                 <ul className="mt-1.5 space-y-1">
                   {result.errors.map((error, index) => (
-                    <li
-                      key={`${error}-${index}`}
-                      className="flex items-start gap-1.5 text-xs font-semibold"
-                    >
+                    <li key={`${error}-${index}`} className="flex items-start gap-1.5 text-sm font-semibold">
                       <span>•</span>
                       <span>{error}</span>
                     </li>
@@ -503,16 +415,16 @@ function Eligibility({ setPage }) {
             )}
 
             {result && result.pass && (
-              <div className="mx-6 mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-700 lg:mx-8">
+              <div className="mx-5 mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-base font-bold text-green-700 lg:mx-8">
                 ✅ {result.message}
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-3 px-6 pb-6 lg:px-8">
+            <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-5 lg:px-8">
               <button
                 type="button"
                 onClick={() => setPage("studentProfiles")}
-                className="h-11 rounded-xl border border-gray-200 bg-white px-5 text-sm font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
+                className="h-12 rounded-xl border border-gray-200 bg-white px-6 text-base font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
               >
                 ← กลับ
               </button>
@@ -521,13 +433,9 @@ function Eligibility({ setPage }) {
                 type="button"
                 onClick={handleCheck}
                 disabled={submitting}
-                className="h-11 flex-1 max-w-xs rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-6 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`${PRIMARY_BTN} flex-1 sm:max-w-xs`}
               >
-                {submitting
-                  ? "กำลังตรวจสอบ..."
-                  : semesterTwo
-                    ? "ไปหน้าอัปโหลดเอกสาร →"
-                    : "ตรวจสอบคุณสมบัติ →"}
+                {submitting ? "กำลังตรวจสอบ..." : semesterTwo ? "ไปหน้าอัปโหลดเอกสาร →" : "ตรวจสอบคุณสมบัติ →"}
               </button>
             </div>
           </div>
@@ -537,19 +445,57 @@ function Eligibility({ setPage }) {
   );
 }
 
-// แถวคัดกรองแบบกระชับ: ไอคอน + หัวข้อ + เกณฑ์ + ช่องกรอกตัวเลข + ปุ่มแนบไฟล์
-// รวมอยู่ในบรรทัดเดียว (แทนที่การ์ดใหญ่แยกกัน 2 การ์ดแบบเดิม)
+/* ---------- ส่วนประกอบย่อย ---------- */
+
+function PageHeader({ subtitle, title, note, chips = [] }) {
+  return (
+    <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-[#07116f] to-[#0646ff] shadow-md">
+      <div className="flex items-center gap-4 p-6 text-white lg:px-8">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-3xl ring-1 ring-white/20">
+          📋
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-blue-100">{subtitle}</p>
+          <h1 className="mt-1 truncate text-2xl font-black leading-tight md:text-3xl">{title}</h1>
+          {note && <p className="mt-1.5 text-base text-blue-100">{note}</p>}
+          {chips.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {chips.map((chip) => (
+                <span key={chip} className="rounded-full bg-white/15 px-3 py-1 text-sm font-bold">
+                  {chip}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultBody({ icon, tone, heading, text, action }) {
+  const toneBg = tone === "green" ? "bg-green-100" : "bg-red-100";
+  const toneText = tone === "green" ? "text-green-700" : "text-red-700";
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+      <div className={`flex h-16 w-16 items-center justify-center rounded-full text-3xl ${toneBg}`}>{icon}</div>
+      {heading && <h2 className={`text-xl font-black ${toneText}`}>{heading}</h2>}
+      <p className="max-w-xl text-base leading-7 text-gray-600">{text}</p>
+      {action && <div className="mt-2">{action}</div>}
+    </div>
+  );
+}
+
 function StatCard({ icon, label, value }) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
+    <div className="rounded-2xl bg-white p-4 shadow-sm lg:p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-bold text-gray-500">{label}</p>
-          <p className="mt-1 truncate text-sm font-black text-[#07116f]">
-            {value}
-          </p>
+          <p className="text-sm font-bold text-gray-500">{label}</p>
+          <p className="mt-1 truncate text-base font-black text-[#07116f]">{value}</p>
         </div>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-lg">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xl">
           {icon}
         </div>
       </div>
@@ -559,112 +505,149 @@ function StatCard({ icon, label, value }) {
 
 function SectionHeader({ icon, title, subtitle }) {
   return (
-    <div className="bg-[#07116f] px-6 py-4 text-white lg:px-8">
+    <div className="bg-[#07116f] px-5 py-4 text-white lg:px-8">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-xl">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15 text-xl">
           {icon}
         </div>
         <div>
-          <h2 className="text-base font-black md:text-lg">{title}</h2>
-          <p className="mt-0.5 text-xs text-blue-100">{subtitle}</p>
+          <h2 className="text-lg font-black md:text-xl">{title}</h2>
+          <p className="mt-0.5 text-sm text-blue-100">{subtitle}</p>
         </div>
       </div>
     </div>
   );
 }
 
-// แถวเลขลำดับ + ชื่อ + ช่องกรอกตัวเลข + เส้นประ + ปุ่มแนบไฟล์
-// รูปแบบ: 1  เกรดเฉลี่ยสะสม (GPAX)  [___]  ...................  [📎 แนบไฟล์]
-function ListQualificationRow({
-  number,
-  title,
-  value,
-  onValueChange,
-  inputProps,
-  file,
-  onFileChange,
-}) {
+function formatFileSize(bytes) {
+  if (!bytes && bytes !== 0) return "";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// การ์ดเกณฑ์ 1 ข้อ: ช่องกรอกค่า + บอกเกณฑ์ + ผลผ่าน/ไม่ผ่านทันที + แนบหลักฐานของข้อนั้นในการ์ดเดียวกัน
+function CriterionCard({ number, title, criteria, unit, value, onChange, inputProps, passed, fileLabel, file, onFileChange }) {
+  const border =
+    passed === false ? "border-red-200" : passed && file ? "border-green-200" : "border-gray-200";
+
   return (
-    <div className="flex items-center gap-2 border-b border-gray-100 py-3 last:border-b-0">
-      {/* เลขลำดับ */}
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700">
-        {number}
-      </span>
+    <div className={`flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition ${border}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#07116f] text-sm font-black text-white">
+            {number}
+          </span>
+          <div>
+            <p className="text-lg font-black text-[#07116f]">{title}</p>
+            <p className="text-sm text-gray-500">เกณฑ์: {criteria}</p>
+          </div>
+        </div>
+        <CriteriaChip passed={passed} />
+      </div>
 
-      {/* ชื่อหัวข้อ */}
-      <span className="shrink-0 max-w-[35%] truncate text-sm font-bold text-[#07116f]">
-        {title}
-      </span>
+      <label className="mt-4 block">
+        <span className="sr-only">{title}</span>
+        <div className="relative">
+          <input
+            type="number"
+            inputMode="decimal"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            {...inputProps}
+            className={`h-12 w-full rounded-xl border bg-[#f8fbff] px-4 text-lg font-bold text-gray-800 outline-none transition placeholder:text-base placeholder:font-normal placeholder:text-gray-400 focus:bg-white focus:ring-4 ${passed === false
+                ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                : "border-gray-200 focus:border-blue-500 focus:ring-blue-100"
+              } ${unit ? "pr-20" : ""}`}
+          />
+          {unit && (
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">
+              {unit}
+            </span>
+          )}
+        </div>
+      </label>
 
-      {/* ช่องกรอกตัวเลข */}
-      <input
-        value={value}
-        onChange={(event) => onValueChange(event.target.value)}
-        {...inputProps}
-        className="h-9 w-20 shrink-0 rounded-lg border border-gray-200 bg-[#f8fbff] px-2 text-sm font-bold text-gray-800 outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-      />
-
-      {/* เส้นประนำสายตา */}
-      <span className="mx-1 flex-1 border-b-2 border-dotted border-gray-300" />
-
-      {/* ปุ่มแนบไฟล์ */}
-      <CompactFileButton file={file} onChange={onFileChange} />
+      <p className="mb-2 mt-4 text-sm font-bold text-gray-600">
+        แนบ{fileLabel} <span className="text-red-500">*</span>
+      </p>
+      <FileDrop file={file} onChange={onFileChange} />
     </div>
   );
 }
 
-// ปุ่มแนบไฟล์ขนาดเล็ก ใช้แทน dropzone ใหญ่แบบเดิม
-function CompactFileButton({ file, onChange }) {
+function CriteriaChip({ passed }) {
+  if (passed === null || passed === undefined) {
+    return <span className="shrink-0 rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-500">ยังไม่กรอก</span>;
+  }
+  return passed ? (
+    <span className="shrink-0 rounded-full bg-green-100 px-3 py-1 text-xs font-black text-green-700">✓ ผ่านเกณฑ์</span>
+  ) : (
+    <span className="shrink-0 rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700">ยังไม่ถึงเกณฑ์</span>
+  );
+}
+
+// ช่องแนบไฟล์: ยังไม่แนบ = กล่องเส้นประกดได้ทั้งกล่อง / แนบแล้ว = แสดงชื่อไฟล์ ขนาด ปุ่มเปลี่ยนและลบ
+function FileDrop({ file, onChange }) {
+  const [dragging, setDragging] = useState(false);
+
+  const pick = (event) => {
+    onChange(event.target.files?.[0] || null);
+    event.target.value = "";
+  };
+
   if (file) {
     return (
-      <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5">
-        <span className="max-w-28 truncate text-xs font-bold text-green-700">
-          {file.name}
+      <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-xl shadow-sm">
+          {file.type === "application/pdf" ? "📄" : "🖼️"}
         </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-green-800">{file.name}</p>
+          <p className="text-xs text-green-700">{formatFileSize(file.size)} · แนบแล้ว</p>
+        </div>
+        <label className="shrink-0 cursor-pointer rounded-lg px-2.5 py-1.5 text-sm font-black text-blue-700 hover:bg-white">
+          เปลี่ยน
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={pick} />
+        </label>
         <button
           type="button"
           onClick={() => onChange(null)}
-          className="shrink-0 text-xs font-black text-red-500 hover:text-red-700"
+          className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-black text-red-600 hover:bg-white"
         >
-          ✕
+          ลบ
         </button>
-      </span>
+      </div>
     );
   }
 
   return (
-    <label className="shrink-0 cursor-pointer">
-      <input
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png"
-        className="hidden"
-        onChange={(event) => onChange(event.target.files?.[0] || null)}
-      />
-      <span className="inline-flex items-center gap-1 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/50 px-3 py-1.5 text-xs font-black text-blue-700 hover:border-blue-500 hover:bg-blue-50">
-        📎 แนบไฟล์
-      </span>
+    <label
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        const dropped = e.dataTransfer.files?.[0];
+        if (dropped) onChange(dropped);
+      }}
+      className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${dragging ? "border-blue-500 bg-blue-50" : "border-blue-200 bg-[#f8fbff] hover:border-blue-400 hover:bg-blue-50"
+        }`}
+    >
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={pick} />
+      <span className="text-2xl">📎</span>
+      <span className="text-sm font-black text-blue-700">กดเพื่อเลือกไฟล์ หรือลากไฟล์มาวาง</span>
+      <span className="text-xs text-gray-500">รองรับ PDF, JPG, PNG</span>
     </label>
   );
 }
 
-// ฟอร์มสร้างคำร้องกู้ยืมใหม่ — โผล่เฉพาะบัญชีที่ยัง "ไม่มีคำร้องเลย"
-// (เช่นเพิ่ง register ใหม่ๆ) เทอม 1 ต้องกรอก GPAX/จิตอาสาไปพร้อมกันเลย
-// เพราะ schema บังคับว่าเทอม 1 ต้องมีค่าตั้งแต่สร้างแถวแรก
-function NewApplicationForm({
-  setPage,
-  currentUser,
-  createNewApplication,
-  onCreated,
-}) {
+// ฟอร์มสร้างคำร้องกู้ยืมใหม่ — โผล่เฉพาะบัญชีที่ยังไม่มีคำร้องเลย
+function NewApplicationForm({ setPage, currentUser, createNewApplication, onCreated }) {
   const { myProfile } = useApp();
 
-  // ดึงประเภทผู้กู้จากหน้า "ข้อมูลของฉัน" (แท็บข้อมูลการกู้ยืม) มาเลย
-  // ไม่ต้องให้เลือกซ้ำที่นี่อีก — ถ้ายังไม่เคยตั้งไว้เลย fallback เป็น
-  // "ผู้กู้รายใหม่" ไปก่อน
+  // ประเภทผู้กู้ดึงจากหน้า "ข้อมูลของฉัน" ถ้ายังไม่ตั้งไว้ใช้ "ผู้กู้รายใหม่"
   const loanTypeCode =
-    myProfile?.loanTypeCode && myProfile.loanTypeCode !== "-"
-      ? myProfile.loanTypeCode
-      : "NEW";
+    myProfile?.loanTypeCode && myProfile.loanTypeCode !== "-" ? myProfile.loanTypeCode : "NEW";
   const [gpax, setGpax] = useState("");
   const [hours, setHours] = useState("");
   const [gpaxFile, setGpaxFile] = useState(null);
@@ -672,8 +655,7 @@ function NewApplicationForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // ดึงช่วงเวลาที่เจ้าหน้าที่เปิดรับจริง (จากหน้า "ตั้งค่า") แทนให้พิมพ์
-  // ปี/เทอมเอง กันพิมพ์ผิดหรือเลือกช่วงที่ปิดไปแล้ว
+  // ช่วงเวลาที่เจ้าหน้าที่เปิดรับจริง
   const [periods, setPeriods] = useState([]);
   const [periodId, setPeriodId] = useState("");
   const [periodsLoading, setPeriodsLoading] = useState(true);
@@ -681,49 +663,34 @@ function NewApplicationForm({
   useEffect(() => {
     let cancelled = false;
 
-    async function loadPeriods() {
-      setPeriodsLoading(true);
+    // เปลี่ยน state เฉพาะหลังได้คำตอบจาก backend (periodsLoading เริ่มเป็น true อยู่แล้ว)
+    fetchApplicationPeriods()
+      .then((result) => {
+        if (cancelled) return;
+        const openPeriods = (result.data || []).filter((period) => period.isOpen);
+        setPeriods(openPeriods);
 
-      try {
-        const result = await fetchApplicationPeriods();
-        const openPeriods = (result.data || []).filter(
-          (period) => period.isOpen
+        // เลือกช่วงที่ "วันนี้" อยู่ในช่วงก่อน ถ้าไม่เจอใช้ตัวแรกที่เปิดอยู่
+        const today = new Date();
+        const matching = openPeriods.find(
+          (period) => today >= new Date(period.startDate) && today <= new Date(period.endDate)
         );
-
-        if (!cancelled) {
-          setPeriods(openPeriods);
-
-          // เลือกช่วงที่ "วันนี้" อยู่ในช่วงจริงๆ ก่อน ถ้าไม่เจอเลยค่อย
-          // fallback ไปตัวแรกในลิสต์ที่เปิดอยู่
-          const today = new Date();
-          const matching = openPeriods.find(
-            (period) =>
-              today >= new Date(period.startDate) &&
-              today <= new Date(period.endDate)
-          );
-
-          const chosen = matching || openPeriods[0];
-
-          if (chosen) {
-            setPeriodId(String(chosen.periodId));
-          }
-        }
-      } catch (err) {
+        const chosen = matching || openPeriods[0];
+        if (chosen) setPeriodId(String(chosen.periodId));
+      })
+      .catch(() => {
         if (!cancelled) setError("ไม่สามารถโหลดช่วงเวลาเปิดรับยื่นกู้ได้");
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setPeriodsLoading(false);
-      }
-    }
+      });
 
-    loadPeriods();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const selectedPeriod = periods.find(
-    (period) => String(period.periodId) === periodId
-  );
+  const selectedPeriod = periods.find((period) => String(period.periodId) === periodId);
 
   const academicYear = selectedPeriod?.academicYear || "";
   const semester = selectedPeriod?.semester || 1;
@@ -765,17 +732,20 @@ function NewApplicationForm({
       const minVolunteerHours = loanTypeCode === "NEW" ? 1 : 36;
 
       const hoursPassed =
-        loanTypeCode === "NEW"
-          ? numHours > minVolunteerHours
-          : numHours >= minVolunteerHours;
+        loanTypeCode === "NEW" ? numHours > minVolunteerHours : numHours >= minVolunteerHours;
 
-      if (!hoursPassed) {
-        setError(
-          `ยังไม่ผ่านเกณฑ์คุณสมบัติเบื้องต้น: ${loanTypeCode === "NEW"
-            ? "ชั่วโมงจิตอาสาต้องมากกว่า 1 ชั่วโมง"
-            : "ชั่วโมงจิตอาสาต้องมากกว่าหรือเท่ากับ 36 ชั่วโมง"
-          } กรุณาแก้ไขข้อมูลแล้วลองอีกครั้ง`
-        );
+      if (!gpaxPassed || !hoursPassed) {
+        const reasons = [];
+        if (!gpaxPassed) reasons.push("GPAX ต้องมากกว่า 1.80");
+        if (!hoursPassed) {
+          reasons.push(
+            loanTypeCode === "NEW"
+              ? "ชั่วโมงจิตอาสาต้องมากกว่า 1 ชั่วโมง"
+              : "ชั่วโมงจิตอาสาต้องมากกว่าหรือเท่ากับ 36 ชั่วโมง"
+          );
+        }
+
+        setError(`ยังไม่ผ่านเกณฑ์คุณสมบัติเบื้องต้น: ${reasons.join(", ")} กรุณาแก้ไขข้อมูลแล้วลองอีกครั้ง`);
         return;
       }
     }
@@ -797,20 +767,13 @@ function NewApplicationForm({
         volunteerHours: semesterOne ? Number(hours) : null,
       });
 
-      // 2) หา requirementId ของ GPAX_EVIDENCE / VOLUNTEER_EVIDENCE ของ
-      //    คำร้องที่เพิ่งสร้าง แล้วอัปโหลดไฟล์แนบทั้ง 2 ไฟล์ต่อทันที —
-      //    อัปโหลดเป็นหลักฐานเก็บไว้เสมอไม่ว่า GPAX จะผ่านหรือไม่ก็ตาม
-      //    เพื่อให้เจ้าหน้าที่เห็นไฟล์ประกอบตอนตรวจสอบคำร้องที่ไม่ผ่าน
+      // อัปโหลดไฟล์หลักฐาน GPAX / จิตอาสา ผูกกับคำร้องที่เพิ่งสร้าง
       if (semesterOne && gpaxFile && hoursFile) {
         const detail = await fetchStudentDetail(result.applicationId);
         const requiredDocs = detail.data?.requiredDocuments || [];
 
-        const gpaxRequirement = requiredDocs.find(
-          (doc) => doc.documentCode === "GPAX_EVIDENCE"
-        );
-        const hoursRequirement = requiredDocs.find(
-          (doc) => doc.documentCode === "VOLUNTEER_EVIDENCE"
-        );
+        const gpaxRequirement = requiredDocs.find((doc) => doc.documentCode === "GPAX_EVIDENCE");
+        const hoursRequirement = requiredDocs.find((doc) => doc.documentCode === "VOLUNTEER_EVIDENCE");
 
         if (gpaxRequirement) {
           await uploadStudentDocument(result.applicationId, {
@@ -829,12 +792,6 @@ function NewApplicationForm({
         }
       }
 
-      // ยกผลลัพธ์ขึ้นไปให้ parent (Eligibility) เก็บแทน ไม่เก็บไว้ที่
-      // state ในนี้เอง เพราะพอสร้างสำเร็จ hasOwnApplication จะเปลี่ยน
-      // ทันที ทำให้ component นี้ถูกถอดออกจากหน้าจอ (unmount) ก่อนจะทัน
-      // โชว์ผล — ต้องยกไปเก็บที่ระดับบนสุดที่ไม่ถูก unmount แทน
-      // (parent จะเป็นคนแยกแสดงหน้า "ผ่าน" หรือ "ไม่ผ่าน" เองจาก
-      // applicationStatus ที่ส่งไป)
       onCreated(result);
     } catch (err) {
       setError(err.message || "สร้างคำร้องไม่สำเร็จ");
@@ -854,11 +811,7 @@ function NewApplicationForm({
           ? "กำลังโหลด..."
           : "ไม่มีช่วงเปิดรับ",
     },
-    {
-      icon: "📊",
-      label: "เกณฑ์ GPAX",
-      value: semesterOne ? "มากกว่า 1.80" : "ไม่ต้องตรวจ",
-    },
+    { icon: "📊", label: "เกณฑ์ GPAX", value: semesterOne ? "มากกว่า 1.80" : "ไม่ต้องตรวจ" },
     {
       icon: "🤝",
       label: "เกณฑ์จิตอาสา",
@@ -870,185 +823,136 @@ function NewApplicationForm({
     },
   ];
 
-  return (
-    <main className="w-full overflow-y-auto px-4 py-4 lg:px-6">
-      <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-        {/* Header ใหญ่ แบบเดียวกับหน้าอื่นๆ ในแอป */}
-        <div className="flex flex-wrap items-center justify-between gap-5 rounded-[28px] bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 py-7 text-white shadow-md">
-          <div className="flex items-center gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-3xl ring-2 ring-white/20">
-              📋
-            </div>
-            <div>
-              <p className="text-sm font-bold text-blue-100">
-                คำขอกู้ยืมเงิน กยศ.
-              </p>
-              <h1 className="mt-1 text-2xl font-black leading-tight md:text-3xl">
-                {currentUser?.fullName || "-"}
-              </h1>
-              <p className="mt-2 text-sm text-blue-100">
-                บัญชีนี้ยังไม่มีคำร้องกู้ยืม กรุณากรอกข้อมูลเพื่อเริ่มคำร้องใหม่
-              </p>
-            </div>
-          </div>
-        </div>
+  // ผลเทียบเกณฑ์แบบทันที (เกณฑ์เดียวกับที่ตรวจตอนกดส่ง)
+  const gpaxPassed = gpax === "" ? null : Number(gpax) > 1.8;
+  const hoursPassed =
+    hours === "" ? null : loanTypeCode === "NEW" ? Number(hours) > 1 : Number(hours) >= 36;
+  const hoursCriteriaText = loanTypeCode === "NEW" ? "มากกว่า 1 ชั่วโมง" : "ตั้งแต่ 36 ชั่วโมงขึ้นไป";
 
-        {/* การ์ดสรุป 4 ใบ — อัปเดตตามค่าที่กำลังกรอกอยู่แบบสด */}
+
+
+  return (
+    <main className={PAGE_MAIN}>
+      <section className={PAGE_WRAP}>
+        <PageHeader
+          subtitle="คำขอกู้ยืมเงิน กยศ."
+          title={currentUser?.fullName || "-"}
+          note="บัญชีนี้ยังไม่มีคำร้องกู้ยืม กรุณากรอกข้อมูลเพื่อเริ่มคำร้องใหม่"
+        />
+
+        {/* การ์ดสรุป 4 ใบ */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {currentSummary.map((item) => (
             <StatCard key={item.label} {...item} />
           ))}
         </div>
 
-        {/* แถบหัวข้อสีกรมท่า + ฟอร์ม */}
-        <section className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+        <section className={CARD}>
           <SectionHeader
             icon="📝"
             title="สร้างคำร้องกู้ยืมเงิน กยศ."
             subtitle="กรอกข้อมูลคัดกรองคุณสมบัติเบื้องต้น"
           />
 
-          <div className="grid gap-5 p-6 sm:grid-cols-2 lg:p-8">
-            {/* ดึงประเภทผู้กู้จากหน้า "ข้อมูลของฉัน" มาแสดงเฉยๆ ไม่ต้อง
-                เลือกซ้ำที่นี่อีก — ถ้าอยากเปลี่ยนต้องไปแก้ที่หน้านั้น */}
-            <div className="block">
-              <span className="text-sm font-black text-[#07116f]">
-                ประเภทผู้กู้
-              </span>
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-[#f8fbff] px-4 py-3">
-                <span className="text-sm font-bold text-gray-700">
-                  {loanTypeLabelOf(loanTypeCode)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage("studentInfo")}
-                  className="text-xs font-black text-blue-600 hover:underline"
-                >
-                  แก้ไข
-                </button>
+          {/* ข้อมูลที่ระบบกำหนดให้ (ไม่ต้องกรอก) */}
+          <div className="grid gap-3 border-b border-gray-100 bg-[#f8fbff] p-5 sm:grid-cols-2 lg:px-8">
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 shadow-sm">
+              <div>
+                <p className="text-sm font-bold text-gray-500">ประเภทผู้กู้</p>
+                <p className="text-base font-black text-[#07116f]">{loanTypeLabelOf(loanTypeCode)}</p>
               </div>
+              <button
+                type="button"
+                onClick={() => setPage("studentInfo")}
+                className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-black text-blue-700 hover:bg-blue-50"
+              >
+                แก้ไข
+              </button>
             </div>
 
-            {/* ดึงช่วงเวลาที่เปิดรับจริงจากฐานข้อมูล (หน้าตั้งค่าเจ้าหน้าที่)
-                ระบบเลือกช่วงที่ตรงกับวันนี้ให้อัตโนมัติ ไม่ต้องเลือกเอง */}
-            <div className="block">
-              <span className="text-sm font-black text-[#07116f]">
-                ช่วงเวลาที่เปิดรับยื่นกู้
-              </span>
+            <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
+              <p className="text-sm font-bold text-gray-500">ช่วงเวลาที่เปิดรับยื่นกู้</p>
               {periodsLoading ? (
-                <div className="mt-2 rounded-xl border border-gray-200 bg-[#f8fbff] px-4 py-3 text-sm text-gray-400">
-                  กำลังโหลด...
-                </div>
+                <p className="text-base text-gray-400">กำลังโหลด...</p>
               ) : !selectedPeriod ? (
-                <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
-                  ไม่มีช่วงเวลาเปิดรับในขณะนี้
-                </div>
+                <p className="text-base font-black text-red-600">ไม่มีช่วงเวลาเปิดรับในขณะนี้</p>
               ) : (
-                <div className="mt-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
-                  <p className="text-sm font-black text-green-700">
-                    ปีการศึกษา {selectedPeriod.academicYear} ภาคเรียนที่{" "}
-                    {selectedPeriod.semester}
-                  </p>
-                  <p className="mt-0.5 text-xs text-green-600">
-                    เปิดรับ {formatThaiDate(selectedPeriod.startDate)} ถึง{" "}
-                    {formatThaiDate(selectedPeriod.endDate)}
-                  </p>
-                </div>
+                <p className="text-base font-black text-[#07116f]">
+                  ปีการศึกษา {selectedPeriod.academicYear} ภาคเรียนที่ {selectedPeriod.semester}
+                  <span className="ml-2 text-sm font-bold text-green-700">
+                    เปิดรับ {formatThaiDate(selectedPeriod.startDate)} – {formatThaiDate(selectedPeriod.endDate)}
+                  </span>
+                </p>
               )}
             </div>
-
-            {semesterOne ? (
-              <>
-                <label className="block">
-                  <span className="text-sm font-black text-[#07116f]">
-                    GPAX
-                  </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="4"
-                    value={gpax}
-                    onChange={(e) => setGpax(e.target.value)}
-                    placeholder="เช่น 2.48"
-                    className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-[#f8fbff] px-4 font-bold outline-none focus:border-blue-500 focus:bg-white"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="text-sm font-black text-[#07116f]">
-                    ชั่วโมงจิตอาสา
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={hours}
-                    onChange={(e) => setHours(e.target.value)}
-                    placeholder="เช่น 36"
-                    className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-[#f8fbff] px-4 font-bold outline-none focus:border-blue-500 focus:bg-white"
-                  />
-                </label>
-              </>
-            ) : (
-              selectedPeriod && (
-                <div className="sm:col-span-2 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-                  <span className="text-lg">ℹ️</span>
-                  <p className="text-sm font-bold text-blue-700">
-                    ภาคเรียนที่ 2 ไม่ต้องคัดกรองคุณสมบัติ (ไม่ต้องกรอก GPAX /
-                    ชั่วโมงจิตอาสา / แนบไฟล์หลักฐาน) ระบบข้ามขั้นตอนนี้ให้
-                    อัตโนมัติ กดปุ่ม "สร้างคำร้อง" ด้านล่างได้เลย
-                  </p>
-                </div>
-              )
-            )}
           </div>
 
-          {/* แนบไฟล์หลักฐานประกอบ — เอากลับมาตามที่ต้องการ */}
-          {semesterOne && (
-            <div className="border-t border-gray-100 px-6 py-4 lg:px-8">
-              <p className="mb-3 text-sm font-black text-[#07116f]">
-                แนบไฟล์หลักฐานประกอบ
-              </p>
-
-              <div className="flex flex-col divide-y divide-gray-50">
-                <div className="flex items-center gap-3 py-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700">
-                    1
-                  </span>
-                  <span className="flex-1 text-sm font-bold text-gray-700">
-                    หลักฐานผลการเรียน (GPAX)
-                  </span>
-                  <CompactFileButton file={gpaxFile} onChange={setGpaxFile} />
-                </div>
-                <div className="flex items-center gap-3 py-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700">
-                    2
-                  </span>
-                  <span className="flex-1 text-sm font-bold text-gray-700">
-                    หลักฐานชั่วโมงจิตอาสา
-                  </span>
-                  <CompactFileButton file={hoursFile} onChange={setHoursFile} />
-                </div>
+          {semesterOne ? (
+            <>
+              <div className="px-5 pt-5 lg:px-8">
+                <p className="text-base font-black text-[#07116f]">กรอกข้อมูลและแนบหลักฐานให้ครบทั้ง 2 ข้อ</p>
+                <p className="text-sm text-gray-500">ระบบจะบอกผลเทียบกับเกณฑ์ให้ทันทีที่กรอก</p>
               </div>
-            </div>
+
+              <div className="grid gap-4 p-5 lg:grid-cols-2 lg:px-8">
+                <CriterionCard
+                  number={1}
+                  title="เกรดเฉลี่ยสะสม (GPAX)"
+                  criteria="มากกว่า 1.80"
+                  value={gpax}
+                  onChange={setGpax}
+                  inputProps={{ step: "0.01", min: "0", max: "4", placeholder: "เช่น 2.48" }}
+                  passed={gpaxPassed}
+                  fileLabel="หลักฐานผลการเรียน (ใบแสดงผลการเรียน)"
+                  file={gpaxFile}
+                  onFileChange={setGpaxFile}
+                />
+
+                <CriterionCard
+                  number={2}
+                  title="ชั่วโมงจิตอาสา"
+                  criteria={hoursCriteriaText}
+                  unit="ชั่วโมง"
+                  value={hours}
+                  onChange={setHours}
+                  inputProps={{ min: "0", placeholder: loanTypeCode === "NEW" ? "เช่น 2" : "เช่น 36" }}
+                  passed={hoursPassed}
+                  fileLabel="หลักฐานชั่วโมงจิตอาสา"
+                  file={hoursFile}
+                  onFileChange={setHoursFile}
+                />
+              </div>
+            </>
+          ) : (
+            selectedPeriod && (
+              <div className="m-5 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 lg:mx-8">
+                <span className="text-xl">ℹ️</span>
+                <p className="text-base font-bold text-blue-700">
+                  ภาคเรียนที่ 2 ไม่ต้องคัดกรองคุณสมบัติ ไม่ต้องกรอก GPAX ชั่วโมงจิตอาสา หรือแนบหลักฐาน
+                  กด "สร้างคำร้อง" ด้านล่างได้เลย
+                </p>
+              </div>
+            )
           )}
 
           {error && (
-            <p className="px-6 pb-2 text-sm font-bold text-red-600 lg:px-8">
+            <p role="alert" className="mx-5 mb-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-base font-bold text-red-700 lg:mx-8">
               {error}
             </p>
           )}
 
-          <div className="px-6 pb-6 lg:px-8">
+          {/* ปุ่มส่ง (ถ้ากรอกไม่ครบ จะแจ้งข้อความด้านบนตอนกด) */}
+          <div className="flex justify-end border-t border-gray-100 px-5 py-5 lg:px-8">
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting}
-              className="h-12 w-full rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-10"
+              disabled={submitting || !selectedPeriod}
+              className={`${PRIMARY_BTN} w-full sm:w-auto sm:px-10`}
             >
               {submitting ? "กำลังสร้างคำร้อง..." : "สร้างคำร้อง →"}
             </button>
           </div>
+
         </section>
       </section>
     </main>

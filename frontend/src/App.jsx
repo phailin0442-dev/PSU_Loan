@@ -24,6 +24,10 @@ import Login from "./login/Login";
 function AppContent() {
   const [page, setPage] = useState("home");
 
+  //const [loanData, setLoanData] = useState(null);
+
+  //console.log("loanData:", loanData);
+
   // เก็บนักศึกษาที่เจ้าหน้าที่เลือกตรวจสอบ
   const [reviewStudent, setReviewStudent] =
     useState(null);
@@ -301,6 +305,36 @@ function AppContent() {
         );
     }
   };
+
+  /*if (page === "staffDashboard") {
+    return (
+      <StaffDashboard
+        students={students}
+        setPage={setPage}
+        openStudentReview={openStudentReview}
+      />
+    );
+  }
+
+  if (page === "studentList") {
+    return (
+      <StudentList
+        students={students}
+        setPage={setPage}
+        openStudentReview={openStudentReview}
+      />
+    );
+  }
+
+  if (page === "documentReview") {
+    return (
+      <DocumentReview
+        student={selectedStudent || students[0]}
+        setPage={setPage}
+        onSave={saveStudentReview}
+      />
+    );
+  }*/
 
   return (
     <>

@@ -224,3 +224,54 @@ export async function fetchDocumentHistory(applicationId, requirementId) {
 
     return handleResponse(response);
 }
+
+/*
+|--------------------------------------------------------------------------
+| ตัวช่วยกลางสำหรับ API ที่ต้อง login
+|--------------------------------------------------------------------------
+| ใช้โดย bookingApi.js (นักศึกษาจองคิว) และ staffQueueApi.js (เจ้าหน้าที่จัดการรอบ)
+| - หา token ที่ได้จากการ login ในเบราว์เซอร์ แล้วแนบไปให้อัตโนมัติ
+| - คืนค่าเฉพาะส่วน data ของคำตอบ
+*/
+
+
+
+// token ที่ AppContext เก็บไว้ตอน login (ดู persistAuth ใน AppContext.jsx)
+function getToken() {
+    try {
+        return localStorage.getItem("psu_loan_token");
+    } catch {
+        return null;
+    }
+}
+
+export async function requestWithAuth(path, { method = "GET", body } = {}) {
+    const token = getToken();
+    let response;
+
+    try {
+        response = await fetch(`${API_BASE_URL}${path}`, {
+            method,
+            headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: body ? JSON.stringify(body) : undefined,
+        });
+    } catch {
+        const error = new Error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบว่า backend เปิดอยู่");
+        error.code = "NETWORK_ERROR";
+        throw error;
+    }
+
+    const json = await response.json().catch(() => ({}));
+
+    if (!response.ok || !json.success) {
+        const error = new Error(json.message || `เกิดข้อผิดพลาด (HTTP ${response.status})`);
+        error.code = json.code; // เช่น SLOT_FULL, UNAUTHORIZED
+        error.status = response.status;
+        throw error;
+    }
+
+    return json.data;
+}

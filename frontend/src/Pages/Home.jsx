@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchHomeContent } from "../services/api";
 
+
 // หน้าประชาสัมพันธ์ — ไม่ผูกกับนักศึกษาที่เลือกอยู่เลย ตั้งใจให้เข้าดูได้
 // โดยไม่ต้อง login (ตามที่ต้องการ) เนื้อหาทั้งหมดดึงจาก GET /api/home จริง
 // (ก่อนหน้านี้ Home.jsx ใช้ mockHomeContents เฉยๆ ไม่เคยต่อ backend เลย)
