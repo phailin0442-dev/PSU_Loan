@@ -3,6 +3,9 @@ const pool = require("../config/db");
 const { requireLogin, requireRole } = require("../middleware/jwtAuth");
 const qualificationService = require("../services/qualificationService");
 const staffQueueService = require("../services/staffQueueService");
+// แก้บัก: route ตรวจเอกสารเรียก recalculateApplicationStatus แต่ไม่เคย import
+// ทำให้เกิด "ReferenceError: recalculateApplicationStatus is not defined"
+const { recalculateApplicationStatus } = require("../utils/applicationStatus");
 
 const router = express.Router();
 
@@ -671,57 +674,13 @@ router.patch("/students/:studentId/documents/:documentId", async (req, res) => {
         );
 
         // สรุปสถานะคำร้องทั้งใบใหม่ จากผลรวมของเอกสารทุกไฟล์ที่ต้องใช้
-        const summaryResult = await client.query(
-            `SELECT
-                COUNT(*) FILTER (WHERE ad.review_status = 'REVISION_REQUIRED') AS revision_count,
-                COUNT(*) FILTER (WHERE ad.review_status = 'APPROVED') AS approved_count,
-                (
-                    SELECT COUNT(*)
-                    FROM psu_loan.document_requirements dr
-                    WHERE dr.loan_type_id = a.loan_type_id
-                      AND dr.academic_year = a.academic_year
-                      AND dr.semester = a.semester
-                      AND dr.is_active = TRUE
-                      AND dr.document_stage <> 'PRESCREEN'
-                      AND (dr.min_age IS NULL OR dr.min_age <= EXTRACT(YEAR FROM AGE(CURRENT_DATE, sp.birth_date))::INTEGER)
-                      AND (dr.max_age IS NULL OR dr.max_age >= EXTRACT(YEAR FROM AGE(CURRENT_DATE, sp.birth_date))::INTEGER)
-                ) AS required_count
-             FROM psu_loan.applications a
-             JOIN psu_loan.student_profiles sp ON sp.student_id = a.student_id
-                          LEFT JOIN psu_loan.application_documents ad
-                 ON ad.application_id = a.application_id
-                AND ad.is_current = TRUE
-                AND ad.requirement_id IN (
-                    SELECT requirement_id FROM psu_loan.document_requirements
-                    WHERE document_stage <> 'PRESCREEN'
-                )
-             WHERE a.application_id = $1
-             GROUP BY a.loan_type_id, a.academic_year, a.semester, sp.birth_date`,
-            [applicationId]
-        );
-
-        const summary = summaryResult.rows[0] || {
-            revision_count: 0,
-            approved_count: 0,
-            required_count: 0,
-        };
-
-        let newApplicationStatus = "DOCUMENT_REVIEW";
-
-        if (Number(summary.revision_count) > 0) {
-            newApplicationStatus = "REVISION_REQUIRED";
-        } else if (
-            Number(summary.required_count) > 0 &&
-            Number(summary.approved_count) >= Number(summary.required_count)
-        ) {
-            newApplicationStatus = "DOCUMENT_APPROVED";
-        }
-
-        await client.query(
-            `UPDATE psu_loan.applications
-             SET application_status = $1::psu_loan.application_status_code
-             WHERE application_id = $2`,
-            [newApplicationStatus, applicationId]
+        // (ใช้ฟังก์ชันกลางร่วมกับตอนอัปโหลดเอกสาร ใน routes/document.js
+        // เพื่อไม่ให้ logic การสรุปผลเพี้ยนไปคนละทางระหว่าง 2 จุดที่แตะ
+        // review_status — เดิมตรงนี้เคยคำนวณเองสด ๆ ซ้ำกับอีกจุด ทำให้
+        // เพิ่มเงื่อนไขใหม่ทีต้องแก้ 2 ที่ และเคยลืมแก้อีกจุดมาก่อน)
+        const newApplicationStatus = await recalculateApplicationStatus(
+            client,
+            applicationId
         );
 
         await client.query("COMMIT");

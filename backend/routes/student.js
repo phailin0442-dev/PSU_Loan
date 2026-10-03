@@ -318,6 +318,34 @@ router.get("/:id", async (req, res) => {
             [applicationId]
         );
 
+        // ประวัติการส่งเอกสาร "ทุกครั้ง" (ทุกเวอร์ชันของทุกรายการ) — 1 แถวต่อ 1
+        // ครั้งที่ส่ง บอกว่าเป็นเอกสารอะไร ส่งครั้งที่เท่าไหร่ ไฟล์ชื่ออะไร สถานะ
+        // ของไฟล์นั้น ใครเป็นผู้ตรวจ และหมายเหตุ (เหตุผลที่ตีกลับ)
+        // ใช้แสดงตารางประวัติในหน้า "ติดตามสถานะ" ฝั่งนักศึกษา
+        const documentSubmissionsQuery = `
+            SELECT
+                ad.document_id AS "documentId",
+                dt.document_name AS "documentName",
+                ad.version_no AS "versionNo",
+                ad.original_file_name AS "fileName",
+                ad.uploaded_at AS "uploadedAt",
+                ad.review_status AS status,
+                ad.latest_remark AS remark,
+                ad.reviewed_at AS "reviewedAt",
+                CONCAT_WS(' ', sf.prefix, sf.first_name, sf.last_name) AS "reviewedByName",
+                ad.is_current AS "isCurrent"
+            FROM psu_loan.application_documents ad
+            JOIN psu_loan.document_requirements dr ON dr.requirement_id = ad.requirement_id
+            JOIN psu_loan.document_types dt ON dt.document_type_id = dr.document_type_id
+            LEFT JOIN psu_loan.staff_profiles sf ON sf.staff_id = ad.reviewed_by
+            WHERE ad.application_id = $1
+            ORDER BY ad.uploaded_at DESC, ad.document_id DESC
+        `;
+        const documentSubmissionsResult = await pool.query(
+            documentSubmissionsQuery,
+            [applicationId]
+        );
+
         res.status(200).json({
             success: true,
             data: {
@@ -326,6 +354,7 @@ router.get("/:id", async (req, res) => {
                 requiredDocuments: documentsResult.rows,
                 statusHistory: statusHistoryResult.rows,
                 documentReviewHistory: documentReviewHistoryResult.rows,
+                documentSubmissions: documentSubmissionsResult.rows,
                 periodOpen,
                 periodMessage,
             },

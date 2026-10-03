@@ -127,13 +127,13 @@ function StudentList({ setPage, openStudentReview }) {
                         </p>
                     </div>
 
-                    {/* <button
+                    <button
                         type="button"
                         onClick={loadStudents}
                         className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-50"
                     >
                         🔄 รีเฟรช
-                    </button> */}
+                    </button>
                 </section>
 
                 <section className="rounded-3xl border border-blue-100 bg-white p-5 shadow-sm sm:p-6">

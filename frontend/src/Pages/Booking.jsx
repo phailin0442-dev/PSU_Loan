@@ -13,46 +13,49 @@ import { bookingApi } from "../services/bookingApi";
  * (ถ้า selectedStudent.id เป็น student_id ไม่ใช่ application_id ให้แก้ที่ getApplicationId)
  */
 
-// ค่าตั้งต้น ใช้เมื่อเจ้าหน้าที่ไม่ได้ระบุสถานที่ของรอบนั้น
-const LOCATIONS = {
-  name: "กองพัฒนานักศึกษา อาคาร 2",
-  detail: "กรุณานำเอกสารฉบับจริงมายื่นตามวันและเวลาที่จอง",
-};
-
-const BOOKABLE_STATUSES = ["DOCUMENT_APPROVED", "QUEUE_BOOKED"];
-const FINISHED_STATUSES = ["SIGNED", "CENTRAL_SUBMITTED", "COMPLETED"];
-const REFRESH_ON_ERROR = ["SLOT_FULL", "SLOT_CLOSED", "SLOT_IN_PAST", "SLOT_NOT_FOUND", "CONFLICT"];
-
-const CANCEL_REASONS = [
-  "ติดธุระในวันและเวลาดังกล่าว",
-  "เจ็บป่วย ไม่สะดวกเดินทาง",
-  "เอกสารยังเตรียมไม่ครบ",
-  "อื่น ๆ",
-];
-
+/* ---------- constants ---------- */
 const C = {
   navy: "#1C2B74",
   navyDark: "#101D5C",
-  ink: "#16205A",
   pink: "#E31C79",
-  muted: "#4F5F82",
-  faint: "#8391B2",
-  line: "#DCE5F3",
-  soft: "#F3F6FC",
-  green: "#159A60",
-  greenBg: "#E6F8EF",
+  ink: "#1B2142",
+  muted: "#5B6485",
+  faint: "#8A93AD",
+  line: "#E3E8F4",
+  soft: "#F1F4FB",
   red: "#D6335A",
+  green: "#159A60",
+  greenBg: "#E8FBF1",
 };
 
 const HEAD = "'Prompt', 'Sarabun', sans-serif";
-const SHADOW_CARD = "0 1px 2px rgba(16,29,92,.05), 0 10px 30px -8px rgba(16,29,92,.14)";
-const SHADOW_ACTIVE = "0 10px 22px -8px rgba(28,43,116,.55), inset 0 1px 0 rgba(255,255,255,.18)";
-const SHADOW_PINK = "0 12px 26px -10px rgba(227,28,121,.7), inset 0 1px 0 rgba(255,255,255,.25)";
 
-/* ---------- helpers ---------- */
+const SHADOW_CARD = "0 10px 30px -14px rgba(16,29,92,.18)";
+const SHADOW_ACTIVE = "0 10px 22px -10px rgba(28,43,116,.6)";
+const SHADOW_PINK = "0 10px 22px -10px rgba(227,28,121,.65)";
 
-function getApplicationId(s) {
-  return s?.applicationId ?? s?.application_id ?? s?.id ?? null;
+// ใช้เป็นค่าเริ่มต้นเมื่อ backend ไม่ส่ง location/detail มา
+const LOCATIONS = {
+  name: "กองทุนเงินให้กู้ยืมเพื่อการศึกษา (กยศ.)", // TODO: แก้เป็นชื่อสถานที่จริง
+  detail: "กรุณานำเอกสารฉบับจริงมาด้วย", // TODO: แก้เป็นรายละเอียดจริง
+};
+
+// TODO: แก้ให้ตรงกับรหัสสถานะจริงจาก backend
+const BOOKABLE_STATUSES = ["SCREENING_PASSED", "BOOKED"];
+const FINISHED_STATUSES = ["DOCUMENT_SUBMITTED", "COMPLETED"];
+
+// รหัส error จาก backend ที่ควรโหลดรอบเวลาใหม่ (เช่น รอบเต็มแล้ว)
+const REFRESH_ON_ERROR = ["SLOT_FULL", "SLOT_NOT_FOUND", "SLOT_CLOSED"];
+
+const CANCEL_REASONS = [
+  "ไม่สะดวกมาตามนัด",
+  "ต้องการเปลี่ยนวันเวลา",
+  "ติดภารกิจเร่งด่วน",
+  "อื่น ๆ", // ต้องตรงกับที่เช็กใน CancelDialog
+];
+
+function getApplicationId(student) {
+  return student?.applicationId ?? student?.application_id ?? student?.id ?? null;
 }
 
 function describeDate(dateStr) {
@@ -203,6 +206,196 @@ const css = `
 }
 `;
 
+/* ---------- ส่วนประกอบย่อย ---------- */
+
+const cardStyle = {
+  background: "linear-gradient(180deg, #FFFFFF, #FBFCFF)",
+  border: `1px solid ${C.line}`,
+  borderRadius: 18,
+  boxShadow: SHADOW_CARD,
+};
+
+function StateCard({ icon, title, text, action }) {
+  return (
+    <div style={{ ...cardStyle, padding: "clamp(32px, 6vw, 56px)", textAlign: "center" }}>
+      <div style={{
+        width: 80, height: 80, borderRadius: "50%", margin: "0 auto 20px",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: "radial-gradient(circle at 30% 25%, #FFFFFF, #E4EBFF 70%)",
+        boxShadow: "0 12px 28px -10px rgba(28,43,116,.4), inset 0 -3px 8px rgba(28,43,116,.08)",
+      }}>
+        {icon}
+      </div>
+      <h1 style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "1.5rem", color: C.ink, margin: "0 0 10px" }}>{title}</h1>
+      <p style={{ color: C.muted, fontSize: ".95rem", lineHeight: 1.7, maxWidth: "48ch", margin: action ? "0 auto 26px" : "0 auto" }}>{text}</p>
+      {action}
+    </div>
+  );
+}
+
+function EmptyBox({ children }) {
+  return (
+    <div style={{
+      borderRadius: 12, background: C.soft, border: `1px dashed ${C.line}`,
+      padding: "15px 16px", color: C.faint, fontSize: ".88rem",
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function Section({ title, done, children }) {
+  return (
+    <div style={{ ...cardStyle, padding: "20px 22px" }}>
+      <h2 style={{
+        display: "flex", alignItems: "center", gap: 8, fontFamily: HEAD, fontWeight: 700,
+        fontSize: "1.02rem", color: C.ink, margin: "0 0 14px",
+      }}>
+        {title}
+        {done && (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 4, fontSize: ".72rem", fontWeight: 700,
+            padding: "3px 9px", borderRadius: 999, background: C.greenBg, color: C.green,
+          }}>
+            <IconCheck size={11} /> เลือกแล้ว
+          </span>
+        )}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function TicketRow({ label, value, valueColor }) {
+  return (
+    <div>
+      <div style={{ fontSize: ".76rem", color: C.faint }}>{label}</div>
+      <div style={{ fontSize: ".92rem", fontWeight: 600, color: valueColor || C.ink }}>{value}</div>
+    </div>
+  );
+}
+
+function pillOptionStyle(active, disabled) {
+  return {
+    border: `1.5px solid ${active ? C.navy : C.line}`,
+    background: active ? `linear-gradient(180deg, #2A3B8C, ${C.navy})` : disabled ? C.soft : "#fff",
+    color: active ? "#fff" : C.ink,
+    fontFamily: "'Sarabun', sans-serif",
+    fontWeight: 600,
+    fontSize: ".86rem",
+    padding: "10px 18px",
+    borderRadius: 12,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+    boxShadow: active ? SHADOW_ACTIVE : "0 1px 2px rgba(16,29,92,.06)",
+  };
+}
+
+/* ---------- กล่องยืนยันการยกเลิก ---------- */
+
+function CancelDialog({ booking, onClose, onConfirm }) {
+  const [reason, setReason] = useState("");
+  const [other, setOther] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const d = describeDate(booking.date);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape" && !busy) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
+  const finalReason = reason === "อื่น ๆ" ? other.trim() : reason;
+  const canSubmit = Boolean(finalReason) && !busy;
+
+  const submit = async () => {
+    if (!finalReason) {
+      setErr("กรุณาระบุเหตุผลการยกเลิก");
+      return;
+    }
+    setErr("");
+    setBusy(true);
+    try {
+      await onConfirm(finalReason);
+    } catch (e) {
+      setErr(e.message || "ยกเลิกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="bk-overlay" onClick={() => !busy && onClose()}
+      style={{
+        position: "fixed", inset: 0, zIndex: 100, display: "grid", placeItems: "center", padding: 20,
+        background: "rgba(16,29,92,.45)", backdropFilter: "blur(3px)",
+      }}>
+      <div className="bk-dialog" role="dialog" aria-modal="true" aria-labelledby="bk-cancel-title"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 440, background: "#fff", borderRadius: 20, padding: "24px 22px 20px",
+          boxShadow: "0 30px 60px -20px rgba(16,29,92,.55)", fontFamily: "'Sarabun', sans-serif", color: C.ink,
+        }}>
+        <h2 id="bk-cancel-title" style={{ fontFamily: HEAD, fontSize: "1.15rem", margin: "0 0 6px" }}>ยกเลิกการจองนี้?</h2>
+        <p style={{ margin: "0 0 16px", fontSize: ".88rem", color: C.muted, lineHeight: 1.6 }}>
+          {d.fullLabel} เวลา {timeRange(booking.startTime, booking.endTime)} ที่ว่างนี้จะเปิดให้ผู้อื่นจองทันที
+          หากต้องการมาใหม่ต้องจองวันเวลาอีกครั้ง
+        </p>
+
+        <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
+          <legend style={{ fontSize: ".84rem", fontWeight: 700, marginBottom: 8 }}>เหตุผลการยกเลิก</legend>
+          <div style={{ display: "grid", gap: 8 }}>
+            {CANCEL_REASONS.map((r) => {
+              const on = reason === r;
+              return (
+                <label key={r} className="bk-reason" style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12,
+                  border: `1.5px solid ${on ? C.navy : C.line}`, background: on ? "#F1F4FF" : "#fff", fontSize: ".88rem",
+                }}>
+                  <input type="radio" name="cancel-reason" value={r} checked={on}
+                    onChange={() => { setReason(r); setErr(""); }}
+                    style={{ accentColor: C.navy, width: 16, height: 16, margin: 0 }} />
+                  {r}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        {reason === "อื่น ๆ" && (
+          <textarea value={other} onChange={(e) => { setOther(e.target.value); setErr(""); }}
+            placeholder="ระบุเหตุผล" rows={3} maxLength={300} autoFocus
+            style={{
+              width: "100%", boxSizing: "border-box", marginTop: 10, padding: "10px 12px", borderRadius: 12,
+              border: `1.5px solid ${C.line}`, fontFamily: "inherit", fontSize: ".88rem", resize: "vertical",
+            }} />
+        )}
+
+        {err && <p role="alert" style={{ margin: "10px 0 0", color: C.red, fontSize: ".82rem", fontWeight: 600 }}>{err}</p>}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+          <button type="button" onClick={onClose} disabled={busy}
+            style={{
+              flex: 1, background: "#fff", border: `1.5px solid ${C.line}`, color: C.ink, fontWeight: 600,
+              fontSize: ".9rem", padding: "11px 14px", borderRadius: 12, cursor: busy ? "not-allowed" : "pointer",
+            }}>
+            เก็บการจองไว้
+          </button>
+          <button type="button" className="bk-cta" onClick={submit} disabled={!canSubmit}
+            style={{
+              flex: 1, border: "none", color: "#fff", fontWeight: 700, fontSize: ".9rem", padding: "11px 14px", borderRadius: 12,
+              background: canSubmit ? `linear-gradient(180deg, #E24B6E, ${C.red})` : "#E3B3BF",
+              boxShadow: canSubmit ? "0 10px 22px -10px rgba(214,51,90,.7)" : "none",
+              cursor: canSubmit ? "pointer" : "not-allowed",
+            }}>
+            {busy ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ================================================================ */
 
 function Booking() {
@@ -283,13 +476,13 @@ function Booking() {
       setNotice("");
       setDateId(null);
       setSlotId(null);
-      reloadSlots().catch(() => {});
+      reloadSlots().catch(() => { });
       refreshSelectedStudentDetail();
     } catch (e) {
       setError(e.message);
       if (REFRESH_ON_ERROR.includes(e.code)) {
         setSlotId(null);
-        reloadSlots().catch(() => {});
+        reloadSlots().catch(() => { });
       }
     } finally {
       setSubmitting(false);
@@ -312,7 +505,7 @@ function Booking() {
     setDateId(null);
     setSlotId(null);
     setNotice(`ยกเลิกการจอง${d.fullLabel} เวลา ${timeRange(booking.startTime, booking.endTime)} เรียบร้อยแล้ว เลือกวันและเวลาใหม่ได้ด้านล่าง`);
-    reloadSlots().catch(() => {});
+    reloadSlots().catch(() => { });
     refreshSelectedStudentDetail();
   };
 
@@ -402,7 +595,7 @@ function Booking() {
     );
   }
 
-    /* ---------- มีการจองอยู่: แสดงนัดหมาย ---------- */
+  /* ---------- มีการจองอยู่: แสดงนัดหมาย ---------- */
   if (booking && !rescheduling) {
     const d = describeDate(booking.date);
     const checkedIn = booking.status === "CHECKED_IN";
@@ -508,21 +701,21 @@ function Booking() {
   return shell(
     <>
       <section style={{ ...cardStyle, padding: "clamp(20px, 3vw, 26px)", marginBottom: 20 }}>
-  <p style={{ margin: "0 0 6px", color: C.pink, fontSize: ".82rem", fontWeight: 800 }}>ขั้นตอนสุดท้ายของการยื่นกู้ยืม</p>
-  <h1 style={{ fontFamily: HEAD, fontWeight: 800, fontSize: "clamp(1.55rem, 4vw, 2rem)", color: C.ink, margin: "0 0 6px" }}>
-    {rescheduling ? "เปลี่ยนวันและเวลานัด" : "จองวันเวลายื่นเอกสาร"}
-  </h1>
-  <p style={{ color: C.muted, fontSize: ".94rem", margin: "0 0 18px" }}>เลือกวันและเวลาสำหรับยื่นเอกสารฉบับจริง</p>
+        <p style={{ margin: "0 0 6px", color: C.pink, fontSize: ".82rem", fontWeight: 800 }}>ขั้นตอนสุดท้ายของการยื่นกู้ยืม</p>
+        <h1 style={{ fontFamily: HEAD, fontWeight: 800, fontSize: "clamp(1.55rem, 4vw, 2rem)", color: C.ink, margin: "0 0 6px" }}>
+          {rescheduling ? "เปลี่ยนวันและเวลานัด" : "จองวันเวลายื่นเอกสาร"}
+        </h1>
+        <p style={{ color: C.muted, fontSize: ".94rem", margin: "0 0 18px" }}>เลือกวันและเวลาสำหรับยื่นเอกสารฉบับจริง</p>
 
-  <div style={{
-    display: "flex", alignItems: "flex-start", gap: 10, color: C.navy, borderRadius: 12,
-    padding: "12px 14px", fontSize: ".88rem",
-    background: "linear-gradient(100deg, #E6F1FF, #F1F6FF)", border: "1px solid #C9DEFB",
-  }}>
-    <span style={{ flexShrink: 0, marginTop: 1 }}><IconInfo /></span>
-    <span>คำขอกู้ยืมของคุณผ่านการตรวจสอบแล้ว กรุณาเลือกวันและเวลาเพื่อยื่นเอกสารฉบับจริงตามนัดหมาย</span>
-  </div>
-</section>
+        <div style={{
+          display: "flex", alignItems: "flex-start", gap: 10, color: C.navy, borderRadius: 12,
+          padding: "12px 14px", fontSize: ".88rem",
+          background: "linear-gradient(100deg, #E6F1FF, #F1F6FF)", border: "1px solid #C9DEFB",
+        }}>
+          <span style={{ flexShrink: 0, marginTop: 1 }}><IconInfo /></span>
+          <span>คำขอกู้ยืมของคุณผ่านการตรวจสอบแล้ว กรุณาเลือกวันและเวลาเพื่อยื่นเอกสารฉบับจริงตามนัดหมาย</span>
+        </div>
+      </section>
 
       {notice && (
         <div role="status" style={{
@@ -645,12 +838,12 @@ function Booking() {
 
         <aside className="bk-aside">
           <div style={{
-  ...cardStyle,
-  padding: 20,
-  border: `1.5px solid ${C.navy}`,
-  boxShadow: "0 0 0 4px rgba(28,43,116,.06), 0 10px 30px -8px rgba(16,29,92,.14)",
-}}>
-  <p style={{ margin: "0 0 4px", color: C.ink, fontSize: "1rem", fontWeight: 800, fontFamily: HEAD }}>สรุปการจอง</p>
+            ...cardStyle,
+            padding: 20,
+            border: `1.5px solid ${C.navy}`,
+            boxShadow: "0 0 0 4px rgba(28,43,116,.06), 0 10px 30px -8px rgba(16,29,92,.14)",
+          }}>
+            <p style={{ margin: "0 0 4px", color: C.ink, fontSize: "1rem", fontWeight: 800, fontFamily: HEAD }}>สรุปการจอง</p>
             <p style={{ margin: "0 0 16px", color: C.faint, fontSize: ".8rem" }}>ตรวจสอบข้อมูลก่อนยืนยัน</p>
 
             <div style={{ display: "grid", gap: 14, borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`, padding: "15px 0" }}>
@@ -684,196 +877,6 @@ function Booking() {
       </div>
     </>,
   );
-}
-
-/* ---------- กล่องยืนยันการยกเลิก ---------- */
-
-function CancelDialog({ booking, onClose, onConfirm }) {
-  const [reason, setReason] = useState("");
-  const [other, setOther] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const d = describeDate(booking.date);
-
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape" && !busy) onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
-
-  const finalReason = reason === "อื่น ๆ" ? other.trim() : reason;
-  const canSubmit = Boolean(finalReason) && !busy;
-
-  const submit = async () => {
-    if (!finalReason) {
-      setErr("กรุณาระบุเหตุผลการยกเลิก");
-      return;
-    }
-    setErr("");
-    setBusy(true);
-    try {
-      await onConfirm(finalReason);
-    } catch (e) {
-      setErr(e.message || "ยกเลิกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="bk-overlay" onClick={() => !busy && onClose()}
-      style={{
-        position: "fixed", inset: 0, zIndex: 100, display: "grid", placeItems: "center", padding: 20,
-        background: "rgba(16,29,92,.45)", backdropFilter: "blur(3px)",
-      }}>
-      <div className="bk-dialog" role="dialog" aria-modal="true" aria-labelledby="bk-cancel-title"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%", maxWidth: 440, background: "#fff", borderRadius: 20, padding: "24px 22px 20px",
-          boxShadow: "0 30px 60px -20px rgba(16,29,92,.55)", fontFamily: "'Sarabun', sans-serif", color: C.ink,
-        }}>
-        <h2 id="bk-cancel-title" style={{ fontFamily: HEAD, fontSize: "1.15rem", margin: "0 0 6px" }}>ยกเลิกการจองนี้?</h2>
-        <p style={{ margin: "0 0 16px", fontSize: ".88rem", color: C.muted, lineHeight: 1.6 }}>
-          {d.fullLabel} เวลา {timeRange(booking.startTime, booking.endTime)} ที่ว่างนี้จะเปิดให้ผู้อื่นจองทันที
-          หากต้องการมาใหม่ต้องจองวันเวลาอีกครั้ง
-        </p>
-
-        <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
-          <legend style={{ fontSize: ".84rem", fontWeight: 700, marginBottom: 8 }}>เหตุผลการยกเลิก</legend>
-          <div style={{ display: "grid", gap: 8 }}>
-            {CANCEL_REASONS.map((r) => {
-              const on = reason === r;
-              return (
-                <label key={r} className="bk-reason" style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12,
-                  border: `1.5px solid ${on ? C.navy : C.line}`, background: on ? "#F1F4FF" : "#fff", fontSize: ".88rem",
-                }}>
-                  <input type="radio" name="cancel-reason" value={r} checked={on}
-                    onChange={() => { setReason(r); setErr(""); }}
-                    style={{ accentColor: C.navy, width: 16, height: 16, margin: 0 }} />
-                  {r}
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-
-        {reason === "อื่น ๆ" && (
-          <textarea value={other} onChange={(e) => { setOther(e.target.value); setErr(""); }}
-            placeholder="ระบุเหตุผล" rows={3} maxLength={300} autoFocus
-            style={{
-              width: "100%", boxSizing: "border-box", marginTop: 10, padding: "10px 12px", borderRadius: 12,
-              border: `1.5px solid ${C.line}`, fontFamily: "inherit", fontSize: ".88rem", resize: "vertical",
-            }} />
-        )}
-
-        {err && <p role="alert" style={{ margin: "10px 0 0", color: C.red, fontSize: ".82rem", fontWeight: 600 }}>{err}</p>}
-
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button type="button" onClick={onClose} disabled={busy}
-            style={{
-              flex: 1, background: "#fff", border: `1.5px solid ${C.line}`, color: C.ink, fontWeight: 600,
-              fontSize: ".9rem", padding: "11px 14px", borderRadius: 12, cursor: busy ? "not-allowed" : "pointer",
-            }}>
-            เก็บการจองไว้
-          </button>
-          <button type="button" className="bk-cta" onClick={submit} disabled={!canSubmit}
-            style={{
-              flex: 1, border: "none", color: "#fff", fontWeight: 700, fontSize: ".9rem", padding: "11px 14px", borderRadius: 12,
-              background: canSubmit ? `linear-gradient(180deg, #E24B6E, ${C.red})` : "#E3B3BF",
-              boxShadow: canSubmit ? "0 10px 22px -10px rgba(214,51,90,.7)" : "none",
-              cursor: canSubmit ? "pointer" : "not-allowed",
-            }}>
-            {busy ? "กำลังยกเลิก..." : "ยืนยันยกเลิก"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- ส่วนประกอบย่อย ---------- */
-
-const cardStyle = {
-  background: "linear-gradient(180deg, #FFFFFF, #FBFCFF)",
-  border: `1px solid ${C.line}`,
-  borderRadius: 18,
-  boxShadow: SHADOW_CARD,
-};
-
-function StateCard({ icon, title, text, action }) {
-  return (
-    <div style={{ ...cardStyle, padding: "clamp(32px, 6vw, 56px)", textAlign: "center" }}>
-      <div style={{
-        width: 80, height: 80, borderRadius: "50%", margin: "0 auto 20px",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: "radial-gradient(circle at 30% 25%, #FFFFFF, #E4EBFF 70%)",
-        boxShadow: "0 12px 28px -10px rgba(28,43,116,.4), inset 0 -3px 8px rgba(28,43,116,.08)",
-      }}>
-        {icon}
-      </div>
-      <h1 style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "1.5rem", color: C.ink, margin: "0 0 10px" }}>{title}</h1>
-      <p style={{ color: C.muted, fontSize: ".95rem", lineHeight: 1.7, maxWidth: "48ch", margin: action ? "0 auto 26px" : "0 auto" }}>{text}</p>
-      {action}
-    </div>
-  );
-}
-
-function EmptyBox({ children }) {
-  return (
-    <div style={{
-      borderRadius: 12, background: C.soft, border: `1px dashed ${C.line}`,
-      padding: "15px 16px", color: C.faint, fontSize: ".88rem",
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function Section({ title, done, children }) {
-  return (
-    <div style={{ ...cardStyle, padding: "20px 22px" }}>
-      <h2 style={{
-        display: "flex", alignItems: "center", gap: 8, fontFamily: HEAD, fontWeight: 700,
-        fontSize: "1.02rem", color: C.ink, margin: "0 0 14px",
-      }}>
-        {title}
-        {done && (
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 4, fontSize: ".72rem", fontWeight: 700,
-            padding: "3px 9px", borderRadius: 999, background: C.greenBg, color: C.green,
-          }}>
-            <IconCheck size={11} /> เลือกแล้ว
-          </span>
-        )}
-      </h2>
-      {children}
-    </div>
-  );
-}
-
-function TicketRow({ label, value, valueColor }) {
-  return (
-    <div>
-      <div style={{ fontSize: ".76rem", color: C.faint }}>{label}</div>
-      <div style={{ fontSize: ".92rem", fontWeight: 600, color: valueColor || C.ink }}>{value}</div>
-    </div>
-  );
-}
-
-function pillOptionStyle(active, disabled) {
-  return {
-    border: `1.5px solid ${active ? C.navy : C.line}`,
-    background: active ? `linear-gradient(180deg, #2A3B8C, ${C.navy})` : disabled ? C.soft : "#fff",
-    color: active ? "#fff" : C.ink,
-    fontFamily: "'Sarabun', sans-serif",
-    fontWeight: 600,
-    fontSize: ".86rem",
-    padding: "10px 18px",
-    borderRadius: 12,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.5 : 1,
-    boxShadow: active ? SHADOW_ACTIVE : "0 1px 2px rgba(16,29,92,.06)",
-  };
 }
 
 export default Booking;

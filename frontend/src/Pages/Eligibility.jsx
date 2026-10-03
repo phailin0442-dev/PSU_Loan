@@ -175,8 +175,62 @@ function Eligibility({ setPage }) {
     }, 600);
   };
 
-  // จังหวะที่เพิ่งสร้างคำร้องสำเร็จ
+  // ต้องเช็คหลัง hooks ทั้งหมดเสมอ (React Hooks Rule)
+
+  // จังหวะที่เพิ่งสร้างคำร้องสำเร็จ (จาก NewApplicationForm เรียก
+  // callback ขึ้นมา) — โชว์ผลตรงนี้เลยที่ระดับบนสุด ไม่ต้องพึ่ง
+  // hasOwnApplication ที่อาจจะยังไม่อัปเดตทันในรอบ render เดียวกัน
+  //
+  // สำคัญ: ต้องแยกแสดงผลตาม `passed` จริงๆ — เดิมคำนวณ `passed` ไว้
+  // แต่ไม่เคยเอาไปใช้ตัดสินใจ JSX เลย ทำให้ต่อให้ GPAX ไม่ผ่าน (บันทึก
+  // ELIGIBILITY_FAILED ที่ backend สำเร็จแล้ว) หน้านี้ก็ยังโชว์การ์ด
+  // "ผ่านการคัดกรอง" อยู่ดี (บั๊ก)
   if (justCreatedResult) {
+    const passed =
+      justCreatedResult.applicationStatus !== "ELIGIBILITY_FAILED";
+
+    if (!passed) {
+      return (
+        <main className="w-full overflow-y-auto px-4 py-4 lg:px-6">
+          <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-5 rounded-[28px] bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 py-7 text-white shadow-md">
+              <div className="flex items-center gap-5">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 text-3xl ring-2 ring-white/20">
+                  📋
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-blue-100">
+                    ขั้นตอนการคัดกรองคุณสมบัติ
+                  </p>
+                  <h1 className="mt-1 text-2xl font-black leading-tight md:text-3xl">
+                    {currentUser?.fullName || "-"}
+                  </h1>
+                </div>
+              </div>
+            </div>
+
+            <section className="overflow-hidden rounded-[24px] bg-white shadow-sm">
+              <SectionHeader
+                icon="⚠️"
+                title="ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติ"
+                subtitle="คำร้องถูกบันทึกไว้ในระบบแล้ว แต่ยังไม่ผ่านเกณฑ์เบื้องต้น"
+              />
+              <div className="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-3xl">
+                  ⚠️
+                </div>
+                <p className="max-w-md text-sm leading-6 text-gray-500">
+                  คำร้องของภาคการศึกษานี้ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติเบื้องต้น
+                  (GPAX ต้องมากกว่า 1.80) ระบบได้บันทึกผลนี้ไว้แล้ว
+                  กรุณาติดต่อเจ้าหน้าที่หากมีข้อสงสัยเกี่ยวกับผลการคัดกรอง
+                </p>
+              </div>
+            </section>
+          </section>
+        </main>
+      );
+    }
+
     return (
       <main className={PAGE_MAIN}>
         <section className={PAGE_WRAP}>
@@ -272,9 +326,8 @@ function Eligibility({ setPage }) {
             <ResultBody
               icon="⚠️"
               tone="red"
-              text={`คำร้องของภาคการศึกษานี้ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติเบื้องต้น (GPAX: ${
-                selectedStudent?.gpax ?? "-"
-              }, ชั่วโมงจิตอาสา: ${selectedStudent?.volunteerHours ?? "-"} ชั่วโมง) กรุณาติดต่อเจ้าหน้าที่หากมีข้อสงสัยเกี่ยวกับผลการคัดกรอง`}
+              text={`คำร้องของภาคการศึกษานี้ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติเบื้องต้น (GPAX: ${selectedStudent?.gpax ?? "-"
+                }, ชั่วโมงจิตอาสา: ${selectedStudent?.volunteerHours ?? "-"} ชั่วโมง) กรุณาติดต่อเจ้าหน้าที่หากมีข้อสงสัยเกี่ยวกับผลการคัดกรอง`}
             />
           </div>
         ) : selectedStudent?.periodOpen === false ? (
@@ -501,11 +554,10 @@ function CriterionCard({ number, title, criteria, unit, value, onChange, inputPr
             value={value}
             onChange={(event) => onChange(event.target.value)}
             {...inputProps}
-            className={`h-12 w-full rounded-xl border bg-[#f8fbff] px-4 text-lg font-bold text-gray-800 outline-none transition placeholder:text-base placeholder:font-normal placeholder:text-gray-400 focus:bg-white focus:ring-4 ${
-              passed === false
+            className={`h-12 w-full rounded-xl border bg-[#f8fbff] px-4 text-lg font-bold text-gray-800 outline-none transition placeholder:text-base placeholder:font-normal placeholder:text-gray-400 focus:bg-white focus:ring-4 ${passed === false
                 ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                 : "border-gray-200 focus:border-blue-500 focus:ring-blue-100"
-            } ${unit ? "pr-20" : ""}`}
+              } ${unit ? "pr-20" : ""}`}
           />
           {unit && (
             <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">
@@ -578,9 +630,8 @@ function FileDrop({ file, onChange }) {
         const dropped = e.dataTransfer.files?.[0];
         if (dropped) onChange(dropped);
       }}
-      className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${
-        dragging ? "border-blue-500 bg-blue-50" : "border-blue-200 bg-[#f8fbff] hover:border-blue-400 hover:bg-blue-50"
-      }`}
+      className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${dragging ? "border-blue-500 bg-blue-50" : "border-blue-200 bg-[#f8fbff] hover:border-blue-400 hover:bg-blue-50"
+        }`}
     >
       <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={pick} />
       <span className="text-2xl">📎</span>
@@ -663,16 +714,23 @@ function NewApplicationForm({ setPage, currentUser, createNewApplication, onCrea
       return;
     }
 
-    // เช็คเกณฑ์ฝั่งหน้าเว็บก่อนเสมอ (ใช้เกณฑ์เดียวกับ backend) — ถ้าไม่ผ่าน ห้ามสร้างคำร้อง
-    //   - GPAX ต้อง "มากกว่า" 1.80
-    //   - ผู้กู้รายใหม่: จิตอาสาต้อง "มากกว่า" 1 ชั่วโมง
-    //   - ผู้กู้ต่อเนื่อง: จิตอาสาต้อง "มากกว่าหรือเท่ากับ" 36 ชั่วโมง
+    // เดิม: เช็ค GPAX กับชั่วโมงจิตอาสารวมกันเป็นเงื่อนไขเดียว ถ้าอันใด
+    // อันหนึ่งไม่ผ่านจะ return ก่อนเรียก createNewApplication เสมอ ทำให้
+    // "GPAX ไม่ผ่าน" ไม่เคยถูกบันทึกที่ backend เลย (บั๊ก — ตามที่คุยกัน
+    // ไว้ GPAX ไม่ผ่านต้องบันทึกเป็น ELIGIBILITY_FAILED ที่ backend ทันที
+    // ส่วนชั่วโมงจิตอาสาไม่ผ่านให้กันไว้แค่ฝั่งหน้าเว็บ ไม่ส่งไปเลย)
+    //
+    // แก้ใหม่: แยกเช็คชั่วโมงจิตอาสาออกมาต่างหาก เป็นเงื่อนไขเดียวที่
+    // block การส่งข้อมูลทั้งหมด (เพราะพิมพ์ผิดแก้ไขเองได้ก่อนกดส่งจริง
+    // ไม่จำเป็นต้องสร้าง record ที่ backend เพื่อบันทึกความผิดพลาดนี้)
+    // ส่วน GPAX ไม่เช็คฝั่งหน้าเว็บอีกต่อไป ปล่อยให้ backend เป็นคนตัดสิน
+    // และบันทึกผลจริง (ผ่าน/ไม่ผ่าน) เสมอ เพราะ GPAX ไม่ผ่านถือเป็นผลสรุป
+    // ที่นักศึกษาแก้ไขข้อมูลย้อนหลังเองไม่ได้ ต้องมีบันทึกที่ backend
+    // ไว้เป็นหลักฐานให้เจ้าหน้าที่เห็น
     if (semesterOne) {
-      const numGpax = Number(gpax);
       const numHours = Number(hours);
       const minVolunteerHours = loanTypeCode === "NEW" ? 1 : 36;
 
-      const gpaxPassed = numGpax > 1.8;
       const hoursPassed =
         loanTypeCode === "NEW" ? numHours > minVolunteerHours : numHours >= minVolunteerHours;
 
@@ -695,6 +753,11 @@ function NewApplicationForm({ setPage, currentUser, createNewApplication, onCrea
     setSubmitting(true);
 
     try {
+      // มาถึงจุดนี้แปลว่าชั่วโมงจิตอาสาผ่านแน่นอนแล้ว (หรือเทอม 2 ไม่ต้อง
+      // ตรวจ) ส่วน GPAX อาจจะผ่านหรือไม่ผ่านก็ได้ — ให้สร้างคำร้องจริง
+      // เสมอ backend จะเป็นคนตัดสินและบันทึก eligibility_status /
+      // application_status ที่ถูกต้องให้เอง (PASSED กับ DOCUMENT_REVIEW
+      // หรือ FAILED กับ ELIGIBILITY_FAILED)
       const result = await createNewApplication({
         studentUserId: currentUser?.userId,
         loanTypeCode,
@@ -878,7 +941,7 @@ function NewApplicationForm({ setPage, currentUser, createNewApplication, onCrea
             </p>
           )}
 
-                    {/* ปุ่มส่ง (ถ้ากรอกไม่ครบ จะแจ้งข้อความด้านบนตอนกด) */}
+          {/* ปุ่มส่ง (ถ้ากรอกไม่ครบ จะแจ้งข้อความด้านบนตอนกด) */}
           <div className="flex justify-end border-t border-gray-100 px-5 py-5 lg:px-8">
             <button
               type="button"

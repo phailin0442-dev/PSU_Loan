@@ -8,7 +8,7 @@ import AppLayout from "./components/AppLayout";
 
 import Home from "./Pages/Home";
 import StudentProfiles from "./Pages/StudentProfiles";
-import StudentInfo from "./Pages/StudentInfo";
+import StudentInfo from "./Pages/studentInfo";
 import Eligibility from "./Pages/Eligibility";
 import UploadDocuments from "./Pages/UploadDocuments";
 import Booking from "./Pages/Booking";
