@@ -899,6 +899,8 @@ router.put("/home-content", async (req, res) => {
 | GET /api/staff/application-periods — ดูทั้งหมด
 | PUT /api/staff/application-periods — สร้าง/แก้ไข (upsert ตาม ปี+เทอม)
 | PATCH /api/staff/application-periods/:id/toggle — เปิด/ปิดด่วน
+| PUT /api/staff/application-periods/:id/queue-dates — กำหนด/ล้างวันเปิด-ปิดจองคิว
+|     (แยกบันทึกจากช่วงยื่นกู้ — PUT ด้านบนไม่แตะวันจองคิว จึงไม่ล้างค่ากัน)
 |--------------------------------------------------------------------------
 */
 
@@ -909,8 +911,10 @@ router.get("/application-periods", async (req, res) => {
                 period_id AS "periodId",
                 academic_year AS "academicYear",
                 semester,
-                start_date AS "startDate",
-                end_date AS "endDate",
+                TO_CHAR(start_date, 'YYYY-MM-DD') AS "startDate",
+                TO_CHAR(end_date, 'YYYY-MM-DD') AS "endDate",
+                TO_CHAR(queue_start_date, 'YYYY-MM-DD') AS "queueStartDate",
+                TO_CHAR(queue_end_date, 'YYYY-MM-DD') AS "queueEndDate",
                 is_open AS "isOpen"
              FROM psu_loan.application_periods
              ORDER BY academic_year DESC, semester ASC`
@@ -1016,6 +1020,74 @@ router.patch("/application-periods/:id/toggle", async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "ไม่สามารถเปลี่ยนสถานะช่วงเวลาได้",
+        });
+    }
+});
+
+/*
+| Body: { "queueStartDate": "2026-10-20", "queueEndDate": "2026-10-31" }
+| ส่ง null ทั้งคู่ = ล้างวันจองคิว
+*/
+router.put("/application-periods/:id/queue-dates", async (req, res) => {
+    try {
+        const periodId = parsePositiveInteger(req.params.id);
+
+        if (!periodId) {
+            return res.status(400).json({
+                success: false,
+                message: "รหัสช่วงเวลาไม่ถูกต้อง",
+            });
+        }
+
+        const queueStartDate = req.body.queueStartDate || null;
+        const queueEndDate = req.body.queueEndDate || null;
+
+        if (Boolean(queueStartDate) !== Boolean(queueEndDate)) {
+            return res.status(400).json({
+                success: false,
+                message: "กรุณาเลือกวันเปิดและวันปิดจองคิวให้ครบทั้งคู่",
+            });
+        }
+
+        if (queueStartDate && new Date(queueEndDate) < new Date(queueStartDate)) {
+            return res.status(400).json({
+                success: false,
+                message: "วันปิดจองคิวต้องไม่ก่อนวันเปิดจองคิว",
+            });
+        }
+
+        const result = await pool.query(
+            `UPDATE psu_loan.application_periods
+             SET queue_start_date = $1,
+                 queue_end_date = $2
+             WHERE period_id = $3
+             RETURNING period_id AS "periodId"`,
+            [queueStartDate, queueEndDate, periodId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "ไม่พบช่วงเวลานี้",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: queueStartDate
+                ? "บันทึกวันจองคิวเรียบร้อยแล้ว"
+                : "ล้างวันจองคิวเรียบร้อยแล้ว",
+            data: result.rows[0],
+        });
+    } catch (error) {
+        console.error(
+            "PUT /api/staff/application-periods/:id/queue-dates error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "ไม่สามารถบันทึกวันจองคิวได้",
         });
     }
 });

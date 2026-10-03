@@ -100,6 +100,20 @@ export async function toggleApplicationPeriod(periodId) {
     return handleResponse(response);
 }
 
+// กำหนด/ล้างวันเปิด-ปิดจองคิวของเทอม (แยกบันทึกจากช่วงยื่นกู้)
+// ส่ง null ทั้งคู่ = ล้างวันจองคิว
+export async function saveQueueDates(periodId, { queueStartDate, queueEndDate }) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/staff/application-periods/${periodId}/queue-dates`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ queueStartDate, queueEndDate }),
+        }
+    );
+    return handleResponse(response);
+}
+
 export async function fetchStaffDashboard() {
     const response = await fetch(`${API_BASE_URL}/api/staff/dashboard`);
     return handleResponse(response);

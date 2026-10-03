@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { staffQueueApi } from "../../services/staffQueueApi";
+import { fetchApplicationPeriods } from "../../services/api";
 
 
 /**
  * หน้าเจ้าหน้าที่: กำหนดวันและรอบยื่นเอกสาร (เชื่อม backend: /api/queue-slots)
  *
- * - เปิดหน้า/สร้างตารางวัน: โหลดรอบที่บันทึกไว้ในช่วงนั้นจากฐานข้อมูล
+ * - ช่วงวันในตาราง ดึงจาก "กำหนดวันจองคิวยื่นเอกสาร" ในหน้าตั้งค่า (application_periods.queue_start_date–queue_end_date)
+ *   เจ้าหน้าที่ไม่ต้องเลือกวันเองในหน้านี้ แค่ตั้งรอบเวลา/สถานที่/จำนวนคนของแต่ละวัน
+ * - เปิดหน้า: โหลดรอบที่บันทึกไว้ในช่วงนั้นจากฐานข้อมูล
  *   วันที่ยังไม่มีรอบในระบบ จะขึ้นรอบตั้งต้นให้ (ยังไม่บันทึกจนกว่าจะกดบันทึก)
  * - รอบที่มีผู้จองแล้ว: เปลี่ยนเวลา/ลบไม่ได้, ลดจำนวนต่ำกว่าผู้จองไม่ได้ (ปิดรอบได้)
  *
@@ -384,188 +387,45 @@ function TimeSelect({ value, onChange, label, disabled, title, invalid }) {
   );
 }
 
-/* ---------- ปฏิทินเลือกวัน (แสดง DD/MM/YYYY เสมอ) ---------- */
+/* ---------- ช่วงวันจองคิวจากหน้าตั้งค่า ---------- */
 
-const USE_BUDDHIST_YEAR = false; // true = แสดงปี พ.ศ. เช่น 21/09/2569
-const WEEKDAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+const MAX_RANGE_DAYS = 62; // ต้องตรงกับ backend services/staffQueueService.js
 
-function formatDMY(dateId) {
-  if (!dateId) return "";
-  const [y, m, d] = dateId.split("-");
-  return `${d}/${m}/${USE_BUDDHIST_YEAR ? Number(y) + 543 : y}`;
+// เทอมที่มีการกำหนดวันจองคิวไว้แล้ว เรียงล่าสุดก่อน
+function periodsWithQueueDates(periods) {
+  return periods
+    .filter((p) => p.queueStartDate && p.queueEndDate)
+    .sort((a, b) => (a.queueStartDate < b.queueStartDate ? 1 : -1));
 }
 
-function DatePicker({ label, value, onChange, min, rangeStart, rangeEnd }) {
-  const [open, setOpen] = useState(false);
-  const [view, setView] = useState(() => (value || todayId()).slice(0, 7)); // "YYYY-MM"
-  const wrapRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e) => {
-      if (!wrapRef.current?.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const toggle = () => {
-    if (!open && value) setView(value.slice(0, 7));
-    setOpen((o) => !o);
-  };
-
-  const [vy, vm] = view.split("-").map(Number);
-  const first = new Date(vy, vm - 1, 1);
-  const daysInMonth = new Date(vy, vm, 0).getDate();
-  const cells = [
-    ...Array(first.getDay()).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) =>
-      toDateId(new Date(vy, vm - 1, i + 1)),
-    ),
-  ];
-  const shiftMonth = (n) =>
-    setView(toDateId(new Date(vy, vm - 1 + n, 1)).slice(0, 7));
-  const monthLabel = new Intl.DateTimeFormat("th-TH", {
-    month: "long",
-    year: "numeric",
-  }).format(first);
+// เลือกเทอมเริ่มต้น: เทอมที่ช่วงจองคิวยังไม่จบ (ใกล้สุดก่อน) ถ้าไม่มีใช้ล่าสุด
+function pickDefaultPeriod(list) {
   const today = todayId();
-
-  return (
-    <div ref={wrapRef} className="relative">
-      <span className="mb-1 block text-xs font-bold text-slate-500">
-        {label}
-      </span>
-      <button
-        type="button"
-        onClick={toggle}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={`${label} ${formatDMY(value)}`}
-        className={`flex h-11 min-w-[168px] items-center justify-between gap-3 rounded-xl border bg-white px-3 text-sm font-bold tabular-nums text-[#16205a] shadow-[inset_0_1px_2px_rgba(15,23,42,.05)] outline-none transition focus-visible:ring-4 focus-visible:ring-[#dce7ff] ${
-          open
-            ? "border-[#07116f] ring-4 ring-[#dce7ff]"
-            : "border-[#cbd8ed] hover:border-[#8ea5d7]"
-        }`}
-      >
-        {formatDMY(value) || "วว/ดด/ปปปป"}
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden="true"
-          className="text-[#3155a3]"
-        >
-          <rect
-            x="3.5"
-            y="5"
-            width="17"
-            height="15"
-            rx="2.5"
-            stroke="currentColor"
-            strokeWidth="1.7"
-          />
-          <path
-            d="M3.5 10h17M8 3v4M16 3v4"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
-
-      {open && (
-        <div
-          role="dialog"
-          aria-label={`เลือก${label}`}
-          className="absolute left-0 top-full z-40 mt-2 w-[296px] rounded-2xl border border-[#dce5f2] bg-white p-3 shadow-[0_24px_48px_-16px_rgba(7,17,111,.45)]"
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => shiftMonth(-1)}
-              aria-label="เดือนก่อนหน้า"
-              className="grid h-8 w-8 place-items-center rounded-lg text-lg font-bold text-[#3155a3] hover:bg-[#f1f5ff]"
-            >
-              ‹
-            </button>
-            <span className="text-sm font-black text-[#07116f]">
-              {monthLabel}
-            </span>
-            <button
-              type="button"
-              onClick={() => shiftMonth(1)}
-              aria-label="เดือนถัดไป"
-              className="grid h-8 w-8 place-items-center rounded-lg text-lg font-bold text-[#3155a3] hover:bg-[#f1f5ff]"
-            >
-              ›
-            </button>
-          </div>
-          <div className="grid grid-cols-7 text-center text-[11px] font-bold text-slate-400">
-            {WEEKDAYS.map((w) => (
-              <span key={w} className="py-1">
-                {w}
-              </span>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-y-0.5">
-            {cells.map((id, i) => {
-              if (!id) return <span key={`e${i}`} />;
-              const disabled = min && id < min;
-              const selected = id === value;
-              const inRange =
-                rangeStart && rangeEnd && id >= rangeStart && id <= rangeEnd;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  disabled={disabled}
-                  aria-label={formatDMY(id)}
-                  aria-pressed={selected}
-                  onClick={() => {
-                    onChange(id);
-                    setOpen(false);
-                  }}
-                  className={`h-9 rounded-lg text-sm font-bold tabular-nums transition ${
-                    selected
-                      ? "bg-gradient-to-b from-[#1a2a9c] to-[#07116f] text-white shadow-[0_6px_14px_-6px_rgba(7,17,111,.8)]"
-                      : disabled
-                        ? "cursor-not-allowed text-slate-300"
-                        : inRange
-                          ? "bg-[#eaf0ff] text-[#07116f] hover:bg-[#dbe5ff]"
-                          : "text-[#16205a] hover:bg-[#f1f5ff]"
-                  } ${id === today && !selected ? "ring-1 ring-inset ring-[#e31c79]" : ""}`}
-                >
-                  {Number(id.slice(8))}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-2 flex justify-between border-t border-[#eef2f8] pt-2">
-            <button
-              type="button"
-              onClick={() => setView(today.slice(0, 7))}
-              className="rounded-lg px-2 py-1 text-xs font-bold text-[#3155a3] hover:bg-[#f1f5ff]"
-            >
-              ไปเดือนนี้
-            </button>
-            <span className="px-2 py-1 text-xs text-slate-400">
-              {formatDMY(value)}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  const upcoming = list
+    .filter((p) => p.queueEndDate >= today)
+    .sort((a, b) => (a.queueStartDate < b.queueStartDate ? -1 : 1));
+  return upcoming[0] ?? list[0] ?? null;
 }
+
+// ช่วงวันที่ใช้สร้างตาราง: ตัดวันที่ผ่านไปแล้วออก (แก้ย้อนหลังไม่ได้)
+function rangeOfPeriod(period) {
+  if (!period) return { error: "", from: null, to: null };
+  const from = period.queueStartDate < todayId() ? todayId() : period.queueStartDate;
+  const to = period.queueEndDate;
+  if (to < todayId()) {
+    return { error: "ช่วงวันจองคิวของเทอมนี้ผ่านไปแล้ว กำหนดวันใหม่ได้ที่หน้าตั้งค่า", from: null, to: null };
+  }
+  if (dayCount(from, to) > MAX_RANGE_DAYS) {
+    return {
+      error: `ช่วงวันจองคิวยาว ${dayCount(from, to)} วัน เกินที่ตั้งได้ (${MAX_RANGE_DAYS} วัน) กรุณาแก้ที่หน้าตั้งค่า`,
+      from: null,
+      to: null,
+    };
+  }
+  return { error: "", from, to };
+}
+
+const periodLabel = (p) => `ปีการศึกษา ${p.academicYear} ภาคเรียนที่ ${p.semester}`;
 
 const CARD =
   "rounded-3xl border border-white/70 bg-white shadow-[0_1px_2px_rgba(7,17,111,.05),0_14px_36px_-14px_rgba(7,17,111,.22)]";
@@ -573,11 +433,9 @@ const CARD =
 /* ================================================================ */
 
 function StaffBooking() {
-  const initialStart = addDays(todayId(), 1);
-  const initialEnd = addDays(initialStart, 13);
-
-  const [startDate, setStartDate] = useState(initialStart);
-  const [endDate, setEndDate] = useState(initialEnd);
+  // เทอมที่กำหนดวันจองคิวไว้แล้ว (จากหน้าตั้งค่า) และเทอมที่กำลังดู
+  const [queuePeriods, setQueuePeriods] = useState([]);
+  const [periodId, setPeriodId] = useState(null);
   const [days, setDays] = useState([]);
   const [selectedDateId, setSelectedDateId] = useState(null);
   const [rangeError, setRangeError] = useState("");
@@ -659,11 +517,29 @@ function StaffBooking() {
 
   useEffect(() => {
     let ignore = false; // ถ้าออกจากหน้าก่อนโหลดเสร็จ จะไม่อัปเดตหน้าจอ
-    staffQueueApi
-      .getSchedule(initialStart, initialEnd)
-      .then((data) => {
+
+    async function load() {
+      // 1) อ่านวันจองคิวที่เจ้าหน้าที่กำหนดไว้ในหน้าตั้งค่า
+      const periodResult = await fetchApplicationPeriods();
+      const list = periodsWithQueueDates(periodResult.data || []);
+      const period = pickDefaultPeriod(list);
+      const range = rangeOfPeriod(period);
+
+      // 2) โหลดรอบที่บันทึกไว้ในช่วงนั้น
+      let next = [];
+      if (range.from) {
+        const data = await staffQueueApi.getSchedule(range.from, range.to);
+        next = daysFromServer(range.from, range.to, data.slots);
+      }
+      return { list, period, range, next };
+    }
+
+    load()
+      .then(({ list, period, range, next }) => {
         if (ignore) return;
-        const next = daysFromServer(initialStart, initialEnd, data.slots);
+        setQueuePeriods(list);
+        setPeriodId(period?.periodId ?? null);
+        setRangeError(range.error);
         setDays(next);
         setSelectedDateId(next[0]?.id ?? null);
         setDirty(false);
@@ -675,7 +551,6 @@ function StaffBooking() {
     return () => {
       ignore = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadKey]);
 
   const retryLoad = () => {
@@ -683,25 +558,31 @@ function StaffBooking() {
     setReloadKey((k) => k + 1);
   };
 
-  /* ---------- range ---------- */
-  const buildRange = async (start, end) => {
-    if (!start || !end || start > end) {
-      setRangeError("วันเริ่มต้นต้องมาก่อนหรือเป็นวันเดียวกับวันสิ้นสุด");
+  /* ---------- เปลี่ยนเทอม (ช่วงวันมาจากหน้าตั้งค่า) ---------- */
+  const selectedPeriod =
+    queuePeriods.find((p) => p.periodId === periodId) ?? null;
+
+  const changePeriod = async (nextId) => {
+    if (
+      dirty &&
+      !window.confirm("มีการแก้ไขที่ยังไม่บันทึก ถ้าเปลี่ยนเทอม การแก้ไขจะหาย ต้องการเปลี่ยนหรือไม่?")
+    ) {
       return;
     }
-    if (dayCount(start, end) > 62) {
-      setRangeError("ตั้งได้ครั้งละไม่เกิน 62 วัน");
+    const period = queuePeriods.find((p) => p.periodId === nextId) ?? null;
+    const range = rangeOfPeriod(period);
+    setPeriodId(nextId);
+    setRangeError(range.error);
+    setSaveError("");
+    setDirty(false);
+    if (!range.from) {
+      setDays([]);
+      setSelectedDateId(null);
       return;
     }
-    setRangeError("");
     setRangeLoading(true);
     try {
-      // วันที่แก้ค้างไว้และยังอยู่ในช่วงใหม่ จะไม่ถูกทับด้วยข้อมูลจากระบบ
-      const keep = dirty
-        ? days.filter((d) => d.id >= start && d.id <= end)
-        : [];
-      await loadRange(start, end, keep);
-      setSaveError("");
+      await loadRange(range.from, range.to);
     } catch (e) {
       setRangeError(e.message);
     } finally {
@@ -890,7 +771,7 @@ function StaffBooking() {
                 กำหนดวันและรอบยื่นเอกสาร
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100 sm:text-base">
-                เลือกช่วงวันที่เปิดรับ ตั้งรอบเวลาและจำนวนคนต่อรอบ
+                ช่วงวันมาจากหน้าตั้งค่า ตั้งรอบเวลาและจำนวนคนต่อรอบของแต่ละวัน
                 แล้วกดบันทึกเพื่อเปิดให้นักศึกษาจอง
               </p>
             </div>
@@ -967,41 +848,73 @@ function StaffBooking() {
                     ช่วงวันที่เปิดรับเอกสาร
                   </h2>
                   <p className="mt-1 pl-[38px] text-sm text-slate-500">
-                    เลือกวันเริ่มและวันสิ้นสุด แล้วกดสร้างตารางวัน
-                    ระบบจะสร้างให้ครบทุกวันในช่วงนั้น
+                    ดึงจาก &quot;กำหนดวันจองคิวยื่นเอกสาร&quot; ในหน้าตั้งค่า
+                    ถ้าต้องการเปลี่ยนช่วงวัน ให้แก้ที่หน้าตั้งค่า
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-end gap-3">
-                  <DatePicker
-                    label="เริ่มวันที่"
-                    value={startDate}
-                    min={todayId()}
-                    rangeStart={startDate}
-                    rangeEnd={endDate}
-                    onChange={(v) => {
-                      setStartDate(v);
-                      if (v > endDate) setEndDate(v);
-                    }}
-                  />
-                  <DatePicker
-                    label="ถึงวันที่"
-                    value={endDate}
-                    min={startDate}
-                    rangeStart={startDate}
-                    rangeEnd={endDate}
-                    onChange={(v) => setEndDate(v)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => buildRange(startDate, endDate)}
-                    disabled={rangeLoading}
-                    className="h-11 rounded-xl bg-gradient-to-b from-[#1a2a9c] to-[#07116f] px-5 text-sm font-bold text-white shadow-[0_10px_22px_-10px_rgba(7,17,111,.8),inset_0_1px_0_rgba(255,255,255,.15)] transition hover:-translate-y-px disabled:cursor-wait disabled:opacity-70"
-                  >
-                    {rangeLoading ? "กำลังโหลด..." : "สร้างตารางวัน"}
-                  </button>
-                </div>
+                {queuePeriods.length > 0 && (
+                  <div className="flex flex-wrap items-end gap-3">
+                    {queuePeriods.length > 1 && (
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-bold text-slate-500">
+                          เทอม
+                        </span>
+                        <select
+                          value={periodId ?? ""}
+                          onChange={(e) => changePeriod(Number(e.target.value))}
+                          disabled={rangeLoading}
+                          className="h-11 rounded-xl border border-[#dce5f2] bg-white px-3 text-sm font-bold text-[#07116f] outline-none focus:border-[#07116f]"
+                        >
+                          {queuePeriods.map((p) => (
+                            <option key={p.periodId} value={p.periodId}>
+                              {periodLabel(p)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    {selectedPeriod && (
+                      <div className="rounded-xl border border-[#dce5f2] bg-[#f8faff] px-4 py-2.5">
+                        <p className="text-xs font-bold text-slate-500">
+                          {periodLabel(selectedPeriod)}
+                        </p>
+                        <p className="sb-num text-sm font-black text-[#07116f]">
+                          {formatDate(selectedPeriod.queueStartDate, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}{" "}
+                          –{" "}
+                          {formatDate(selectedPeriod.queueEndDate, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                    )}
+
+                    {rangeLoading && (
+                      <span className="text-sm font-semibold text-slate-500">
+                        กำลังโหลด...
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {queuePeriods.length === 0 && (
+                <div className="mt-5 rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+                  <p className="font-black">ยังไม่ได้กำหนดวันจองคิวยื่นเอกสาร</p>
+                  <p className="mt-1">
+                    ไปที่เมนู <b>ตั้งค่า</b> → แท็บ <b>ช่วงเวลาเปิดรับยื่นกู้</b> →
+                    กล่อง <b>กำหนดวันจองคิวยื่นเอกสาร</b> เลือกวันเปิด–ปิดจองคิว
+                    แล้วกดบันทึก จากนั้นกลับมาหน้านี้ ตารางวันจะขึ้นให้อัตโนมัติ
+                  </p>
+                </div>
+              )}
 
               {rangeError && (
                 <p
