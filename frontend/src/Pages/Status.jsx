@@ -13,8 +13,9 @@ import { useApp } from "../context/AppContext";
 /* ---------- ตั้งค่า (แก้ตรงนี้ถ้าจำเป็น) ---------- */
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-// ไปหน้าจองคิว: ถ้า App.jsx สลับหน้าด้วยฟังก์ชันใน context ให้แก้ชื่อฟังก์ชัน/ชื่อหน้าตรงนี้
+// ชื่อหน้าที่ใช้ตอนกดปุ่มไปหน้าอื่น (ต้องตรงกับชื่อหน้าใน App.jsx ถ้าปุ่มไม่พาไป ให้แก้ตรงนี้)
 const BOOKING_PAGE_KEY = "booking";
+const UPLOAD_PAGE_KEY = "uploadDocuments";
 
 function getToken() {
     for (const key of ["token", "accessToken", "authToken", "jwt"]) {
@@ -438,7 +439,7 @@ const selectStyle = {
 
 /* ================================================================ */
 
-function Status() {
+function Status({ setPage } = {}) {
     const appContext = useApp();
     const { selectedStudent } = appContext;
     const applicationId = getApplicationId(selectedStudent);
@@ -493,14 +494,22 @@ function Status() {
         }
     }, [details]);
 
-    const goToBooking = () => {
-        const nav = appContext.setCurrentPage || appContext.setPage || appContext.navigateTo || appContext.navigate;
+    // พาไปหน้าอื่น: ใช้ setPage ที่ App.jsx ส่งมา > ฟังก์ชันใน context > เปลี่ยน URL
+    const goToPage = (pageKey) => {
+        const nav =
+            setPage ||
+            appContext.setCurrentPage ||
+            appContext.setPage ||
+            appContext.navigateTo ||
+            appContext.navigate;
         if (typeof nav === "function") {
-            nav(BOOKING_PAGE_KEY);
+            nav(pageKey);
         } else {
-            window.location.assign(`/${BOOKING_PAGE_KEY}`);
+            window.location.assign(`/${pageKey}`);
         }
     };
+    const goToBooking = () => goToPage(BOOKING_PAGE_KEY);
+    const goToUpload = () => goToPage(UPLOAD_PAGE_KEY);
 
     const selectedApp = apps.find((a) => String(a.application_id) === String(applicationId));
     const selectedDetail = details[applicationId];
@@ -508,6 +517,9 @@ function Status() {
         ? selectedDetail.requiredDocuments.every((d) => d.status !== "ยังไม่อัปโหลด")
         : null;
     const progress = getProgress(selectedApp?.application_status, docsComplete);
+    const revisionDocs = (selectedDetail?.requiredDocuments || []).filter(
+        (d) => d.status === "REVISION_REQUIRED" || d.status === "REJECTED",
+    );
 
     const years = useMemo(() => [...new Set(apps.map((a) => a.academic_year))].sort().reverse(), [apps]);
     const loanTypes = useMemo(() => [...new Set(apps.map((a) => a.loan_type_name))], [apps]);
@@ -585,14 +597,53 @@ function Status() {
                     </div>
                 )}
 
+                {revisionDocs.length > 0 && (
+                    <div role="alert" style={{ background: C.amberBg, border: "2px solid #F5D9A3", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                            <div style={{ fontFamily: HEAD, fontWeight: 700, color: C.amber }}>
+                                มีเอกสารที่ต้องแก้ไข {revisionDocs.length} รายการ
+                            </div>
+                            <button type="button" className="st-cta" onClick={goToUpload}
+                                style={{
+                                    border: "none", background: "linear-gradient(180deg, #E8A317, #D98E04)", color: "#fff",
+                                    fontFamily: HEAD, fontWeight: 700, fontSize: ".9rem", padding: "10px 22px", borderRadius: 999,
+                                    cursor: "pointer", boxShadow: "0 10px 22px -10px rgba(217,142,4,.7)",
+                                }}>
+                                แก้ไขเอกสาร
+                            </button>
+                        </div>
+                        <ul style={{ margin: "10px 0 0", padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+                            {revisionDocs.map((d) => (
+                                <li key={d.requirementId} style={{ background: "#fff", border: "1px solid #F5D9A3", borderRadius: 10, padding: "9px 12px", fontSize: ".86rem" }}>
+                                    <div style={{ fontWeight: 700, color: C.ink }}>{d.documentType}</div>
+                                    {d.note && <div style={{ color: C.red, marginTop: 3 }}>เหตุผล: {d.note}</div>}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
                 <div className="st-steps">
                     {STEPS.map((step) => {
                         const state = stepState(step.n, progress);
                         const status = selectedApp?.application_status;
                         const showBook = step.n === 5 && status === "DOCUMENT_APPROVED";
                         const showView = step.n === 5 && status === "QUEUE_BOOKED";
+                        const showFix = step.n === 3 && state === "revision";
+                        const showUpload = step.n === 3 && state === "active";
                         return (
                             <StepBox key={step.n} step={step} state={state}>
+                                {(showFix || showUpload) && (
+                                    <button type="button" className="st-cta" onClick={goToUpload}
+                                        style={{
+                                            marginTop: "auto", border: "none",
+                                            background: showFix ? "linear-gradient(180deg, #E8A317, #D98E04)" : `linear-gradient(180deg, #2A3B8C, ${C.navy})`,
+                                            color: "#fff", fontFamily: HEAD, fontWeight: 700, fontSize: ".82rem",
+                                            padding: "8px 18px", borderRadius: 999, cursor: "pointer",
+                                        }}>
+                                        {showFix ? "แก้ไขเอกสาร" : "อัปโหลดเอกสาร"}
+                                    </button>
+                                )}
                                 {(showBook || showView) && (
                                     <button type="button" className="st-cta" onClick={goToBooking}
                                         style={{

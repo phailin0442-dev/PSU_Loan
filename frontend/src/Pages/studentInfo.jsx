@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useApp } from "../context/AppContext";
 
 const loanTypeLabels = {
@@ -6,6 +6,51 @@ const loanTypeLabels = {
     CONTINUING_SPECIAL: "ผู้กู้ต่อเนื่องกรณีพิเศษ",
     CONTINUING_YEAR: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี",
 };
+
+// ฟิลด์บังคับ -> แท็บที่ฟิลด์นั้นอยู่ (ใช้กระโดดไปแท็บที่ขาดข้อมูลให้อัตโนมัติ)
+const REQUIRED_FIELD_TABS = {
+    prefix: 0,
+    firstName: 0,
+    lastName: 0,
+    citizenId: 0,
+    birthDate: 0,
+    phone: 0,
+    email: 0,
+    address: 0,
+    province: 0,
+    postalCode: 0,
+    faculty: 1,
+    major: 1,
+    yearLevel: 1,
+    loanTypeCode: 6,
+};
+
+const FIELD_LABELS = {
+    prefix: "คำนำหน้า",
+    firstName: "ชื่อ",
+    lastName: "นามสกุล",
+    citizenId: "เลขบัตรประชาชน",
+    birthDate: "วันเกิด",
+    phone: "เบอร์โทร",
+    email: "อีเมล",
+    address: "ที่อยู่",
+    province: "จังหวัด",
+    postalCode: "รหัสไปรษณีย์",
+    faculty: "คณะ",
+    major: "สาขาวิชา",
+    yearLevel: "ชั้นปี",
+    loanTypeCode: "ประเภทผู้กู้",
+};
+
+const sections = [
+    { icon: "👤", label: "ข้อมูลส่วนบุคคล" },
+    { icon: "🏫", label: "ข้อมูลการศึกษา" },
+    { icon: "👨", label: "ข้อมูลบิดา" },
+    { icon: "👩", label: "ข้อมูลมารดา" },
+    { icon: "🧑", label: "ข้อมูลผู้ปกครอง" },
+    { icon: "🏠", label: "ข้อมูลครอบครัว" },
+    { icon: "📋", label: "ข้อมูลการกู้ยืม" },
+];
 
 // รวมข้อมูลคำร้อง (selectedStudent) กับข้อมูลส่วนตัวจริง (myProfile จาก student_profiles)
 function mergeProfileIntoForm(current, selectedStudent, myProfile) {
@@ -68,19 +113,19 @@ function StudentInfo({ setPage }) {
     const [formData, setFormData] = useState(selectedStudent || {});
     const [message, setMessage] = useState("");
     const [messageType, setMessageType] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    // ช่องที่ผู้ใช้พิมพ์/เลือกเองแล้ว — ข้อมูลจากฐานข้อมูลที่โหลดมาทีหลังห้ามเขียนทับช่องเหล่านี้
+    const [touchedFields, setTouchedFields] = useState([]);
+
+    // ช่องที่ขาด/ไม่ถูกต้อง (ใช้ทำกรอบแดงและจุดแดงที่แท็บ)
+    const [invalidFields, setInvalidFields] = useState([]);
 
     // แท็บที่เปิดอยู่ตอนนี้ (0-6) — ให้กรอกทีละหัวข้อแทนเลื่อนยาว
     const [activeSection, setActiveSection] = useState(0);
 
-    const sections = [
-        { icon: "👤", label: "ข้อมูลส่วนบุคคล" },
-        { icon: "🏫", label: "ข้อมูลการศึกษา" },
-        { icon: "👨", label: "ข้อมูลบิดา" },
-        { icon: "👩", label: "ข้อมูลมารดา" },
-        { icon: "🧑", label: "ข้อมูลผู้ปกครอง" },
-        { icon: "🏠", label: "ข้อมูลครอบครัว" },
-        { icon: "📋", label: "ข้อมูลการกู้ยืม" },
-    ];
+    // กรอบที่ครอบช่องกรอกทุกแท็บ ใช้อ่านค่าจริงจากหน้าจอตอนกดบันทึก
+    const containerRef = useRef(null);
 
     // เติมข้อมูลลงฟอร์มทุกครั้งที่ selectedStudent หรือ myProfile เปลี่ยน
     // ทำระหว่าง render (เก็บค่าก่อนหน้าไว้เทียบ) แทน useEffect ตามแนวทางของ React
@@ -91,7 +136,16 @@ function StudentInfo({ setPage }) {
         setPrevSources({ selectedStudent, myProfile });
         setMessage("");
         setMessageType("");
-        setFormData((current) => mergeProfileIntoForm(current, selectedStudent, myProfile));
+        setFormData((current) => {
+            const merged = mergeProfileIntoForm(current, selectedStudent, myProfile);
+
+            // ค่าที่ผู้ใช้กรอกเองแล้ว ให้คงไว้ ไม่ให้ข้อมูลจากฐานข้อมูลทับ
+            touchedFields.forEach((key) => {
+                merged[key] = current[key];
+            });
+
+            return merged;
+        });
     }
 
     const handleChange = (event) => {
@@ -102,109 +156,137 @@ function StudentInfo({ setPage }) {
             [name]: value,
         }));
 
+        setTouchedFields((current) =>
+            current.includes(name) ? current : [...current, name]
+        );
+
+        setInvalidFields((current) =>
+            current.includes(name) ? current.filter((field) => field !== name) : current
+        );
+
         if (message) {
             setMessage("");
             setMessageType("");
         }
     };
 
-    const handleSubmit = async (event) => {
-        event.preventDefault();
+    // อ่านค่าจริงจากช่องกรอกทุกช่อง (ทุกแท็บ) ณ ตอนนี้
+    const readDomValues = () => {
+        const values = {};
+        const root = containerRef.current;
 
-        // แม็ปฟิลด์บังคับไปยังแท็บที่ฟิลด์นั้นอยู่ ใช้กระโดดไปแท็บที่ขาดข้อมูลให้อัตโนมัติ
-        const requiredFieldTabs = {
-            prefix: 0,
-            firstName: 0,
-            lastName: 0,
-            citizenId: 0,
-            birthDate: 0,
-            phone: 0,
-            email: 0,
-            address: 0,
-            province: 0,
-            postalCode: 0,
-            faculty: 1,
-            major: 1,
-            yearLevel: 1,
-        };
+        if (!root) return values;
 
-        const requiredFields = Object.keys(requiredFieldTabs);
+        root
+            .querySelectorAll("input[name], select[name], textarea[name]")
+            .forEach((element) => {
+                if (element.disabled) return;
+                values[element.name] = element.value;
+            });
 
-        const missingFields = requiredFields.filter(
-            (field) => !String(formData[field] ?? "").trim()
+        return values;
+    };
+
+    const handleSubmit = async () => {
+        if (saving) return;
+
+        // ใช้ค่าที่เห็นอยู่บนหน้าจอจริง ๆ ตอนกดบันทึก (รวมค่าที่เบราว์เซอร์เติมให้ ค่าจากการพิมพ์ภาษาไทย
+        // หรือการวาง ที่อาจยังไม่ถูกส่งเข้า state) มาตรวจและบันทึก — กันต้องกดบันทึกสองรอบ
+        const latest = { ...formData, ...readDomValues() };
+        setFormData(latest);
+
+        const missingFields = Object.keys(REQUIRED_FIELD_TABS).filter(
+            (field) => !String(latest[field] ?? "").trim()
         );
 
         if (missingFields.length > 0) {
-            const firstMissingTab = Math.min(
-                ...missingFields.map((field) => requiredFieldTabs[field])
+            setInvalidFields(missingFields);
+            setActiveSection(
+                Math.min(...missingFields.map((field) => REQUIRED_FIELD_TABS[field]))
             );
-
-            setActiveSection(firstMissingTab);
-
-            const fieldLabels = {
-                prefix: "คำนำหน้า",
-                firstName: "ชื่อ",
-                lastName: "นามสกุล",
-                citizenId: "เลขบัตรประชาชน",
-                birthDate: "วันเกิด",
-                phone: "เบอร์โทร",
-                email: "อีเมล",
-                address: "ที่อยู่",
-                province: "จังหวัด",
-                postalCode: "รหัสไปรษณีย์",
-                faculty: "คณะ",
-                major: "สาขาวิชา",
-                yearLevel: "ชั้นปี",
-            };
-
             setMessage(
                 `กรุณากรอกข้อมูลให้ครบ ยังขาด: ${missingFields
-                    .map((field) => fieldLabels[field] || field)
+                    .map((field) => FIELD_LABELS[field] || field)
                     .join(", ")}`
             );
             setMessageType("error");
             return;
         }
 
+        // ตรวจรูปแบบที่ฐานข้อมูลบังคับ จะได้บอกเหตุผลชัดเจนแทนข้อความทั่วไป
+        const formatErrors = [];
+
+        if (!/^\d{13}$/.test(String(latest.citizenId).trim())) {
+            formatErrors.push({
+                field: "citizenId",
+                text: "เลขประจำตัวประชาชนต้องเป็นตัวเลข 13 หลัก",
+            });
+        }
+
+        if (!/^\d{5}$/.test(String(latest.postalCode).trim())) {
+            formatErrors.push({
+                field: "postalCode",
+                text: "รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก",
+            });
+        }
+
+        if (formatErrors.length > 0) {
+            setInvalidFields(formatErrors.map((item) => item.field));
+            setActiveSection(0);
+            setMessage(formatErrors.map((item) => item.text).join(" / "));
+            setMessageType("error");
+            return;
+        }
+
         // บันทึกจริงลง student_profiles (ไม่ผูกกับคำร้อง ใช้ได้เสมอ)
+        setInvalidFields([]);
         setMessage("");
         setMessageType("");
+        setSaving(true);
 
         try {
             await saveMyProfile({
-                citizenId: formData.citizenId,
-                prefix: formData.prefix,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                birthDate: formData.birthDate,
-                phone: formData.phone,
-                faculty: formData.faculty,
-                major: formData.major,
-                yearLevel: Number(formData.yearLevel),
-                houseNo: formData.address,
+                citizenId: String(latest.citizenId).trim(),
+                prefix: latest.prefix,
+                firstName: latest.firstName,
+                lastName: latest.lastName,
+                birthDate: latest.birthDate,
+                phone: latest.phone,
+                faculty: latest.faculty,
+                major: latest.major,
+                yearLevel: Number(latest.yearLevel),
+                houseNo: latest.address,
                 subdistrict: myProfile?.subdistrict || "-",
                 district: myProfile?.district || "-",
-                province: formData.province,
-                postalCode: formData.postalCode,
-                loanTypeCode: formData.loanTypeCode || null,
+                province: latest.province,
+                postalCode: String(latest.postalCode).trim(),
+                loanTypeCode: latest.loanTypeCode || null,
             });
+
+            setTouchedFields([]);
+            setMessage("บันทึกข้อมูลเรียบร้อยแล้ว");
+            setMessageType("success");
+
+            alert("✅ บันทึกข้อมูลเรียบร้อยแล้ว");
+
+            setTimeout(() => {
+                setPage("eligibility");
+            }, 700);
         } catch (error) {
             setMessage(
                 error.message || "บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
             );
             setMessageType("error");
-            return;
+        } finally {
+            setSaving(false);
         }
-
-        setMessage("บันทึกข้อมูลเรียบร้อยแล้ว");
-        setMessageType("success");
-
-        alert("✅ บันทึกข้อมูลเรียบร้อยแล้ว");
-
-        setTimeout(() => {
-            setPage("eligibility");
-        }, 700);
     };
+
+    const isInvalid = (name) => invalidFields.includes(name);
+
+    // ทุกแท็บถูก render ไว้ตลอด (ซ่อนด้วย CSS) เพื่ออ่านค่าจริงได้ครบทุกช่อง
+    const tabClass = (index) =>
+        activeSection === index ? "flex flex-1 flex-col" : "hidden";
 
     return (
         <main className="w-full px-4 py-6 sm:px-6 lg:px-10 2xl:px-14">
@@ -262,27 +344,43 @@ function StudentInfo({ setPage }) {
                 <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-stretch">
                     {/* Sidebar เลือกหัวข้อ */}
                     <nav className="flex gap-1.5 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm lg:sticky lg:top-6 lg:w-60 lg:shrink-0 lg:flex-col lg:self-start lg:overflow-visible xl:w-64">
-                        {sections.map((section, index) => (
-                            <button
-                                key={section.label}
-                                type="button"
-                                onClick={() => setActiveSection(index)}
-                                className={`flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition lg:shrink ${activeSection === index
+                        {sections.map((section, index) => {
+                            const hasError = invalidFields.some(
+                                (field) => REQUIRED_FIELD_TABS[field] === index
+                            );
+
+                            return (
+                                <button
+                                    key={section.label}
+                                    type="button"
+                                    onClick={() => setActiveSection(index)}
+                                    className={`flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition lg:shrink ${activeSection === index
                                         ? "bg-[#07116f] text-white shadow-sm"
                                         : "text-gray-600 hover:bg-blue-50"
-                                    }`}
-                            >
-                                <span className="text-base">{section.icon}</span>
-                                <span className="whitespace-nowrap lg:whitespace-normal">
-                                    {section.label}
-                                </span>
-                            </button>
-                        ))}
+                                        }`}
+                                >
+                                    <span className="text-base">{section.icon}</span>
+                                    <span className="whitespace-nowrap lg:whitespace-normal">
+                                        {section.label}
+                                    </span>
+
+                                    {hasError && (
+                                        <span
+                                            className="ml-auto h-2.5 w-2.5 shrink-0 rounded-full bg-red-500"
+                                            title="มีช่องที่ต้องกรอก"
+                                        />
+                                    )}
+                                </button>
+                            );
+                        })}
                     </nav>
 
                     {/* เนื้อหาของแท็บที่เลือก */}
-                    <div className="flex min-w-0 flex-1 flex-col gap-4">
-                        {activeSection === 0 && (
+                    <div
+                        ref={containerRef}
+                        className="flex min-w-0 flex-1 flex-col gap-4"
+                    >
+                        <div className={tabClass(0)}>
                             <FormSection
                                 icon="👤"
                                 title="ข้อมูลส่วนบุคคล"
@@ -292,6 +390,7 @@ function StudentInfo({ setPage }) {
                                     <SelectInput
                                         label="คำนำหน้าชื่อ"
                                         required
+                                        invalid={isInvalid("prefix")}
                                         name="prefix"
                                         value={formData.prefix}
                                         onChange={handleChange}
@@ -306,6 +405,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="ชื่อ"
                                         required
+                                        invalid={isInvalid("firstName")}
                                         name="firstName"
                                         value={formData.firstName}
                                         onChange={handleChange}
@@ -315,6 +415,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="นามสกุล"
                                         required
+                                        invalid={isInvalid("lastName")}
                                         name="lastName"
                                         value={formData.lastName}
                                         onChange={handleChange}
@@ -324,6 +425,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="เลขประจำตัวประชาชน"
                                         required
+                                        invalid={isInvalid("citizenId")}
                                         name="citizenId"
                                         value={formData.citizenId}
                                         onChange={handleChange}
@@ -335,6 +437,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="วันเดือนปีเกิด"
                                         required
+                                        invalid={isInvalid("birthDate")}
                                         name="birthDate"
                                         type="date"
                                         value={formData.birthDate}
@@ -374,6 +477,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="หมายเลขโทรศัพท์"
                                         required
+                                        invalid={isInvalid("phone")}
                                         name="phone"
                                         value={formData.phone}
                                         onChange={handleChange}
@@ -384,6 +488,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="อีเมล"
                                         required
+                                        invalid={isInvalid("email")}
                                         name="email"
                                         type="email"
                                         value={formData.email}
@@ -394,6 +499,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="จังหวัด"
                                         required
+                                        invalid={isInvalid("province")}
                                         name="province"
                                         value={formData.province}
                                         onChange={handleChange}
@@ -403,6 +509,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="รหัสไปรษณีย์"
                                         required
+                                        invalid={isInvalid("postalCode")}
                                         name="postalCode"
                                         value={formData.postalCode}
                                         onChange={handleChange}
@@ -415,6 +522,7 @@ function StudentInfo({ setPage }) {
                                         <Textarea
                                             label="ที่อยู่ปัจจุบัน"
                                             required
+                                            invalid={isInvalid("address")}
                                             name="address"
                                             value={formData.address}
                                             onChange={handleChange}
@@ -423,9 +531,9 @@ function StudentInfo({ setPage }) {
                                     </div>
                                 </div>
                             </FormSection>
-                        )}
+                        </div>
 
-                        {activeSection === 1 && (
+                        <div className={tabClass(1)}>
                             <FormSection
                                 icon="🏫"
                                 title="ข้อมูลการศึกษา"
@@ -444,6 +552,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="คณะ"
                                         required
+                                        invalid={isInvalid("faculty")}
                                         name="faculty"
                                         value={formData.faculty}
                                         onChange={handleChange}
@@ -453,6 +562,7 @@ function StudentInfo({ setPage }) {
                                     <Input
                                         label="สาขาวิชา"
                                         required
+                                        invalid={isInvalid("major")}
                                         name="major"
                                         value={formData.major}
                                         onChange={handleChange}
@@ -462,6 +572,7 @@ function StudentInfo({ setPage }) {
                                     <SelectInput
                                         label="ชั้นปี"
                                         required
+                                        invalid={isInvalid("yearLevel")}
                                         name="yearLevel"
                                         value={formData.yearLevel}
                                         onChange={handleChange}
@@ -477,9 +588,9 @@ function StudentInfo({ setPage }) {
                                     />
                                 </div>
                             </FormSection>
-                        )}
+                        </div>
 
-                        {activeSection === 2 && (
+                        <div className={tabClass(2)}>
                             <FormSection
                                 icon="👨"
                                 title="ข้อมูลบิดา"
@@ -492,9 +603,9 @@ function StudentInfo({ setPage }) {
                                     defaultPrefix="นาย"
                                 />
                             </FormSection>
-                        )}
+                        </div>
 
-                        {activeSection === 3 && (
+                        <div className={tabClass(3)}>
                             <FormSection
                                 icon="👩"
                                 title="ข้อมูลมารดา"
@@ -507,9 +618,9 @@ function StudentInfo({ setPage }) {
                                     defaultPrefix="นาง"
                                 />
                             </FormSection>
-                        )}
+                        </div>
 
-                        {activeSection === 4 && (
+                        <div className={tabClass(4)}>
                             <FormSection
                                 icon="🧑"
                                 title="ข้อมูลผู้ปกครอง"
@@ -605,9 +716,9 @@ function StudentInfo({ setPage }) {
                                     />
                                 </div>
                             </FormSection>
-                        )}
+                        </div>
 
-                        {activeSection === 5 && (
+                        <div className={tabClass(5)}>
                             <FormSection
                                 icon="🏠"
                                 title="ข้อมูลครอบครัว"
@@ -648,9 +759,9 @@ function StudentInfo({ setPage }) {
                                     />
                                 </div>
                             </FormSection>
-                        )}
+                        </div>
 
-                        {activeSection === 6 && (
+                        <div className={tabClass(6)}>
                             <FormSection
                                 icon="📋"
                                 title="ข้อมูลการกู้ยืม"
@@ -660,10 +771,12 @@ function StudentInfo({ setPage }) {
                                     <SelectInput
                                         label="ประเภทผู้กู้"
                                         required
+                                        invalid={isInvalid("loanTypeCode")}
                                         name="loanTypeCode"
                                         value={formData.loanTypeCode}
                                         onChange={handleChange}
                                         options={[
+                                            { value: "", label: "เลือกประเภทผู้กู้" },
                                             { value: "NEW", label: "ผู้กู้รายใหม่" },
                                             { value: "CONTINUING_SPECIAL", label: "ผู้กู้ต่อเนื่องกรณีพิเศษ" },
                                             { value: "CONTINUING_YEAR", label: "ผู้กู้ต่อเนื่องเลื่อนชั้นปี" },
@@ -687,13 +800,14 @@ function StudentInfo({ setPage }) {
                                     </div>
                                 </div>
                             </FormSection>
-                        )}
+                        </div>
 
                         {message && (
                             <div
+                                role={messageType === "error" ? "alert" : "status"}
                                 className={`rounded-xl border px-4 py-3 text-sm font-black ${messageType === "success"
-                                        ? "border-green-200 bg-green-50 text-green-700"
-                                        : "border-red-200 bg-red-50 text-red-700"
+                                    ? "border-green-200 bg-green-50 text-green-700"
+                                    : "border-red-200 bg-red-50 text-red-700"
                                     }`}
                             >
                                 <div className="flex items-center gap-2.5">
@@ -751,14 +865,11 @@ function StudentInfo({ setPage }) {
                                 ) : (
                                     <button
                                         type="button"
-                                        onClick={() =>
-                                            handleSubmit({
-                                                preventDefault: () => { },
-                                            })
-                                        }
-                                        className="h-11 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-7 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+                                        onClick={handleSubmit}
+                                        disabled={saving}
+                                        className="h-11 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-7 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                                     >
-                                        💾 บันทึกข้อมูลนักศึกษา
+                                        {saving ? "กำลังบันทึก..." : "💾 บันทึกข้อมูลนักศึกษา"}
                                     </button>
                                 )}
                             </div>
@@ -887,6 +998,11 @@ function FormSection({ icon, title, subtitle, children }) {
     );
 }
 
+const FIELD_OK =
+    "border-gray-200 bg-[#f8fbff] hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-blue-100";
+const FIELD_INVALID =
+    "border-red-400 bg-red-50 hover:border-red-500 focus:border-red-500 focus:bg-white focus:ring-red-100";
+
 function Input({
     label,
     name,
@@ -894,6 +1010,7 @@ function Input({
     onChange,
     type = "text",
     required = false,
+    invalid = false,
     placeholder = "",
     suffix = "",
     ...inputProps
@@ -914,8 +1031,9 @@ function Input({
                     onChange={onChange}
                     placeholder={placeholder}
                     required={required}
-                    className={`h-11 w-full rounded-xl border border-gray-200 bg-[#f8fbff] px-3.5 text-sm font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${suffix ? "pr-14" : ""
-                        }`}
+                    aria-invalid={invalid || undefined}
+                    className={`h-11 w-full rounded-xl border px-3.5 text-sm font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 focus:ring-4 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${invalid ? FIELD_INVALID : FIELD_OK
+                        } ${suffix ? "pr-14" : ""}`}
                     {...inputProps}
                 />
 
@@ -929,7 +1047,15 @@ function Input({
     );
 }
 
-function SelectInput({ label, name, value, onChange, options, required = false }) {
+function SelectInput({
+    label,
+    name,
+    value,
+    onChange,
+    options,
+    required = false,
+    invalid = false,
+}) {
     return (
         <label className="block min-w-0">
             <span className="text-xs font-black text-[#07116f] sm:text-sm">
@@ -944,7 +1070,9 @@ function SelectInput({ label, name, value, onChange, options, required = false }
                     value={value ?? ""}
                     onChange={onChange}
                     required={required}
-                    className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-[#f8fbff] px-3.5 pr-9 text-sm font-semibold text-gray-800 outline-none transition hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                    aria-invalid={invalid || undefined}
+                    className={`h-11 w-full cursor-pointer appearance-none rounded-xl border px-3.5 pr-9 text-sm font-semibold text-gray-800 outline-none transition focus:ring-4 ${invalid ? FIELD_INVALID : FIELD_OK
+                        }`}
                 >
                     {options.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -961,7 +1089,15 @@ function SelectInput({ label, name, value, onChange, options, required = false }
     );
 }
 
-function Textarea({ label, name, value, onChange, required = false, placeholder = "" }) {
+function Textarea({
+    label,
+    name,
+    value,
+    onChange,
+    required = false,
+    invalid = false,
+    placeholder = "",
+}) {
     return (
         <label className="block">
             <span className="text-xs font-black text-[#07116f] sm:text-sm">
@@ -976,11 +1112,13 @@ function Textarea({ label, name, value, onChange, required = false, placeholder 
                 onChange={onChange}
                 required={required}
                 placeholder={placeholder}
+                aria-invalid={invalid || undefined}
                 rows={3}
-                className="mt-1.5 w-full resize-y rounded-xl border border-gray-200 bg-[#f8fbff] px-3.5 py-2.5 text-sm font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                className={`mt-1.5 w-full resize-y rounded-xl border px-3.5 py-2.5 text-sm font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 focus:ring-4 ${invalid ? FIELD_INVALID : FIELD_OK
+                    }`}
             />
         </label>
     );
 }
 
-export default StudentInfo; 
+export default StudentInfo;
