@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../context/AppContext";
 import {
   DOCUMENT_TYPES,
@@ -6,7 +6,9 @@ import {
 } from "../rules/documentRules";
 import { uploadStudentDocument } from "../services/api";
 
-// ไม่รวม GPAX_EVIDENCE / VOLUNTEER_EVIDENCE เพราะอัปโหลดไปแล้วตั้งแต่หน้า "คัดกรองคุณสมบัติ"
+// หลักฐานคัดกรอง (ปกติอัปโหลดมาตั้งแต่หน้า "คัดกรองคุณสมบัติ")
+// ใช้แค่ซ่อนป้ายสถานะในรายการ "เอกสารที่ส่งแล้ว" เท่านั้น
+// ไม่ได้ตัดออกจากรายการที่ต้องส่งแล้ว — ถ้า backend ยังไม่มีไฟล์ จะบังคับให้แนบที่หน้านี้
 const PRESCREEN_CATEGORIES = ["GPAX_EVIDENCE", "VOLUNTEER_EVIDENCE"];
 
 function UploadDocuments({ setPage }) {
@@ -20,18 +22,38 @@ function UploadDocuments({ setPage }) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+  const [refreshing, setRefreshing] = useState(true);
+
+  // โหลดรายการเอกสารล่าสุดจาก backend ทุกครั้งที่เปิดหน้า
+  // (เผื่อเพิ่งอัปโหลดหลักฐาน GPAX / จิตอาสามาจากหน้าคัดกรอง จะได้ไม่ถูกขอซ้ำ)
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.resolve(
+      typeof refreshSelectedStudentDetail === "function"
+        ? refreshSelectedStudentDetail()
+        : null
+    )
+      .catch(() => { })
+      .finally(() => {
+        if (!cancelled) setRefreshing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // เอกสารที่ต้องมีช่อง "อัปโหลด" ในหน้านี้ มี 2 กรณี:
-  //   1) ยังไม่เคยอัปโหลดเลย (ไม่มี documentId)
+  //   1) ยังไม่เคยอัปโหลดเลย (ไม่มี documentId) — รวมหลักฐาน GPAX / จิตอาสาด้วย
   //   2) เคยอัปโหลดแล้วแต่เจ้าหน้าที่ตีกลับ (status === REVISION_REQUIRED)
   // ส่วนที่ "ผ่าน" หรือ "รอตรวจสอบ" ยังคงล็อกไว้ — ใช้ requirementId จริงจาก backend เสมอ
+  // รายการนี้มาจาก backend ชุดเดียวกับที่หน้าสถานะใช้ จึงไม่มีทางส่งไม่ครบได้อีก
   const pendingRequirements = useMemo(() => {
     return (selectedStudent?.requiredDocuments || [])
       .filter(
         (item) => !item.documentId || item.status === "REVISION_REQUIRED"
-      )
-      .filter(
-        (item) => !PRESCREEN_CATEGORIES.includes(item.documentCode)
       )
       .map((item) => ({
         requirementId: item.requirementId,
@@ -203,52 +225,60 @@ function UploadDocuments({ setPage }) {
           </div>
         </div>
 
-        {/* แถบความคืบหน้า */}
-        {required.length > 0 && (
-          <div className="rounded-2xl bg-white px-6 py-4 shadow-sm lg:px-8">
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-bold text-gray-500">
-                เลือกไฟล์ให้ครบก่อนถึงจะส่งได้
-              </span>
-              <span className="text-base font-black text-blue-600">{progress}</span>
-            </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-blue-100">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-[#07116f] to-[#0646ff] transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* รายการเอกสารที่ต้องอัปโหลด — แบบลิสต์เลขลำดับ เส้นประนำสายตา */}
-        {required.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
-            <p className="text-3xl">🎉</p>
-            <p className="mt-2 text-lg font-black text-gray-600">
-              ส่งเอกสารครบทุกรายการแล้ว
-            </p>
+        {refreshing ? (
+          <div className="rounded-2xl bg-white px-6 py-10 text-center text-base font-bold text-gray-400 shadow-sm">
+            กำลังโหลดรายการเอกสาร...
           </div>
         ) : (
-          <div className="flex flex-col rounded-2xl bg-white px-6 py-2 shadow-sm lg:px-8">
-            {required.map((item, index) => (
-              <ListUploadRow
-                key={item.requirementId}
-                number={index + 1}
-                title={DOCUMENT_TYPES[item.category] || item.name}
-                file={files[item.requirementId]}
-                uploading={
-                  submitting && uploadingCategory === item.requirementId
-                }
-                isReupload={item.isReupload}
-                rejectReason={item.rejectReason}
-                onChange={(file) =>
-                  handleFileChange(item.requirementId, file)
-                }
-                onRemove={() => handleRemoveFile(item.requirementId)}
-              />
-            ))}
-          </div>
+          <>
+            {/* แถบความคืบหน้า */}
+            {required.length > 0 && (
+              <div className="rounded-2xl bg-white px-6 py-4 shadow-sm lg:px-8">
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="font-bold text-gray-500">
+                    เลือกไฟล์ให้ครบก่อนถึงจะส่งได้
+                  </span>
+                  <span className="text-base font-black text-blue-600">{progress}</span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-blue-100">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#07116f] to-[#0646ff] transition-all duration-300"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* รายการเอกสารที่ต้องอัปโหลด — แบบลิสต์เลขลำดับ เส้นประนำสายตา */}
+            {required.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
+                <p className="text-3xl">🎉</p>
+                <p className="mt-2 text-lg font-black text-gray-600">
+                  ส่งเอกสารครบทุกรายการแล้ว
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col rounded-2xl bg-white px-6 py-2 shadow-sm lg:px-8">
+                {required.map((item, index) => (
+                  <ListUploadRow
+                    key={item.requirementId}
+                    number={index + 1}
+                    title={DOCUMENT_TYPES[item.category] || item.name}
+                    file={files[item.requirementId]}
+                    uploading={
+                      submitting && uploadingCategory === item.requirementId
+                    }
+                    isReupload={item.isReupload}
+                    rejectReason={item.rejectReason}
+                    onChange={(file) =>
+                      handleFileChange(item.requirementId, file)
+                    }
+                    onRemove={() => handleRemoveFile(item.requirementId)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* เอกสารที่ส่งแล้ว */}
@@ -285,11 +315,10 @@ function UploadDocuments({ setPage }) {
 
         {message && (
           <div
-            className={`rounded-xl border px-5 py-3 text-base font-bold ${
-              messageType === "success"
+            className={`rounded-xl border px-5 py-3 text-base font-bold ${messageType === "success"
                 ? "border-green-200 bg-green-50 text-green-700"
                 : "border-red-200 bg-red-50 text-red-700"
-            }`}
+              }`}
           >
             {message}
           </div>
@@ -308,7 +337,7 @@ function UploadDocuments({ setPage }) {
           <button
             type="button"
             onClick={handleSubmitAll}
-            disabled={!allSelected || submitting}
+            disabled={refreshing || !allSelected || submitting}
             className="h-12 max-w-sm flex-1 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 text-base font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting
@@ -332,9 +361,8 @@ function StatusPill({ status }) {
 
   return (
     <span
-      className={`shrink-0 rounded-full px-3 py-1 text-sm font-black ${
-        styles[status] || "bg-gray-100 text-gray-700"
-      }`}
+      className={`shrink-0 rounded-full px-3 py-1 text-sm font-black ${styles[status] || "bg-gray-100 text-gray-700"
+        }`}
     >
       {status}
     </span>
@@ -357,21 +385,19 @@ function ListUploadRow({
 
   return (
     <div
-      className={`my-2 flex items-center gap-3 rounded-xl py-4 ${
-        needsFix
+      className={`my-2 flex items-center gap-3 rounded-xl py-4 ${needsFix
           ? "border-2 border-red-300 bg-red-50/60 px-4"
           : "border-b border-gray-100 px-1 last:border-b-0"
-      }`}
+        }`}
     >
       {/* เลขลำดับ */}
       <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${
-          file
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${file
             ? "bg-green-100 text-green-700"
             : isReupload
               ? "bg-red-100 text-red-700"
               : "bg-blue-100 text-blue-700"
-        }`}
+          }`}
       >
         {file ? "✓" : isReupload ? "!" : number}
       </span>
@@ -391,9 +417,8 @@ function ListUploadRow({
 
       {/* เส้นประนำสายตา */}
       <span
-        className={`mx-1 flex-1 border-b-2 border-dotted ${
-          needsFix ? "border-red-300" : "border-gray-300"
-        }`}
+        className={`mx-1 flex-1 border-b-2 border-dotted ${needsFix ? "border-red-300" : "border-gray-300"
+          }`}
       />
 
       {/* ปุ่มแนบไฟล์ / สถานะไฟล์ที่เลือก */}

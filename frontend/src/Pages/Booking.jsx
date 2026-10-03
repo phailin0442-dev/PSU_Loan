@@ -40,9 +40,11 @@ const LOCATIONS = {
   detail: "กรุณานำเอกสารฉบับจริงมาด้วย", // TODO: แก้เป็นรายละเอียดจริง
 };
 
-// TODO: แก้ให้ตรงกับรหัสสถานะจริงจาก backend
-const BOOKABLE_STATUSES = ["SCREENING_PASSED", "BOOKED"];
-const FINISHED_STATUSES = ["DOCUMENT_SUBMITTED", "COMPLETED"];
+// รหัสสถานะคำร้องจาก backend — ชุดเดียวกับ App.jsx และหน้าติดตามสถานะ
+//   จองได้: เอกสารผ่านการตรวจแล้ว หรือจองไว้แล้ว (เปลี่ยน/ยกเลิกนัดได้)
+//   เสร็จแล้ว: ลงนาม / ส่งส่วนกลาง / เสร็จสิ้น ไม่ต้องจองเพิ่ม
+const BOOKABLE_STATUSES = ["DOCUMENT_APPROVED", "QUEUE_BOOKED"];
+const FINISHED_STATUSES = ["SIGNED", "CENTRAL_SUBMITTED", "COMPLETED"];
 
 // รหัส error จาก backend ที่ควรโหลดรอบเวลาใหม่ (เช่น รอบเต็มแล้ว)
 const REFRESH_ON_ERROR = ["SLOT_FULL", "SLOT_NOT_FOUND", "SLOT_CLOSED"];
@@ -56,6 +58,47 @@ const CANCEL_REASONS = [
 
 function getApplicationId(student) {
   return student?.applicationId ?? student?.application_id ?? student?.id ?? null;
+}
+
+// ข้อความ + ปุ่มพาไปต่อ เมื่อยังจองไม่ได้ แยกตามสถานะคำร้องจริง
+function lockedInfoOf(status) {
+  switch (status) {
+    case "DOCUMENT_REVIEW":
+      return {
+        title: "รอเจ้าหน้าที่ตรวจสอบเอกสาร",
+        text: "เอกสารของคุณอยู่ระหว่างการตรวจสอบ เมื่อเจ้าหน้าที่ตรวจผ่านแล้ว จะจองวันเวลายื่นเอกสารได้ทันที",
+        page: "status",
+        label: "ดูสถานะคำขอ",
+      };
+    case "REVISION_REQUIRED":
+      return {
+        title: "มีเอกสารที่ต้องแก้ไข",
+        text: "เจ้าหน้าที่ให้แก้ไขเอกสารบางรายการ กรุณาส่งเอกสารใหม่ให้ครบ แล้วรอผลการตรวจอีกครั้งก่อนจองวันเวลา",
+        page: "uploadDocuments",
+        label: "ไปแก้ไขเอกสาร",
+      };
+    case "ELIGIBILITY_FAILED":
+      return {
+        title: "คำขอไม่ผ่านการคัดกรอง",
+        text: "คำขอนี้ไม่ผ่านการคัดกรองคุณสมบัติ จึงจองวันเวลายื่นเอกสารไม่ได้ หากมีข้อสงสัยกรุณาติดต่อเจ้าหน้าที่",
+        page: "status",
+        label: "ดูสถานะคำขอ",
+      };
+    case "CANCELLED":
+      return {
+        title: "คำขอนี้ถูกยกเลิกแล้ว",
+        text: "คำขอที่ถูกยกเลิกแล้วจองวันเวลาไม่ได้ หากต้องการกู้ยืม กรุณายื่นคำขอใหม่",
+        page: "status",
+        label: "ดูสถานะคำขอ",
+      };
+    default:
+      return {
+        title: "ยังไม่สามารถจองได้",
+        text: "ต้องยื่นคำขอกู้ยืมเงิน กยศ. อัปโหลดเอกสารให้ครบ และรอเจ้าหน้าที่ตรวจเอกสารผ่านก่อน จึงจะจองวันเวลายื่นเอกสารได้",
+        page: "eligibility",
+        label: "ไปหน้าคำขอกู้ยืมเงิน กยศ.",
+      };
+  }
 }
 
 function describeDate(dateStr) {
@@ -183,6 +226,7 @@ const css = `
 }
 .bk-cta { transition: transform .15s, box-shadow .15s; }
 .bk-cta:hover:not(:disabled) { transform: translateY(-1px); }
+.bk-link { background: none; border: none; color: ${C.navy}; font-weight: 600; font-size: .86rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 4px; }
 
 @keyframes bk-shimmer { 0% { background-position: -300px 0; } 100% { background-position: 300px 0; } }
 .bk-skel { background: linear-gradient(90deg, ${C.soft} 0, #E6ECF7 60px, ${C.soft} 120px); background-size: 600px 100%;
@@ -213,6 +257,12 @@ const cardStyle = {
   border: `1px solid ${C.line}`,
   borderRadius: 18,
   boxShadow: SHADOW_CARD,
+};
+
+const primaryCtaStyle = {
+  display: "inline-block", background: `linear-gradient(180deg, #2A3B8C, ${C.navy})`, color: "#fff",
+  border: "none", fontWeight: 600, fontSize: ".92rem", padding: "12px 26px", borderRadius: 999,
+  cursor: "pointer", boxShadow: SHADOW_ACTIVE, fontFamily: "inherit",
 };
 
 function StateCard({ icon, title, text, action }) {
@@ -398,11 +448,27 @@ function CancelDialog({ booking, onClose, onConfirm }) {
 
 /* ================================================================ */
 
-function Booking() {
+function Booking({ setPage }) {
   const { selectedStudent, refreshSelectedStudentDetail } = useApp();
 
+  // โหลดสถานะคำร้องล่าสุดก่อนตัดสินว่าจองได้ไหม
+  // (กันหน้าจอขึ้น "ยังจองไม่ได้" แวบหนึ่งระหว่างรอข้อมูล)
+  const [detailReady, setDetailReady] = useState(false);
+
   useEffect(() => {
-    refreshSelectedStudentDetail();
+    let cancelled = false;
+
+    Promise.resolve(
+      typeof refreshSelectedStudentDetail === "function" ? refreshSelectedStudentDetail() : null
+    )
+      .catch(() => { })
+      .finally(() => {
+        if (!cancelled) setDetailReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStudent?.id]);
 
@@ -410,6 +476,10 @@ function Booking() {
   const applicationId = getApplicationId(selectedStudent);
   const canBook = BOOKABLE_STATUSES.includes(statusCode);
   const isFinished = FINISHED_STATUSES.includes(statusCode);
+
+  const goTo = (page) => {
+    if (typeof setPage === "function") setPage(page);
+  };
 
   const [slots, setSlots] = useState([]);
   const [booking, setBooking] = useState(null);
@@ -499,12 +569,13 @@ function Booking() {
   const handleCancel = async (reason) => {
     await bookingApi.cancel(applicationId, reason); // โยน error ให้ dialog แสดงเอง
     const d = describeDate(booking.date);
+    const oldRange = timeRange(booking.startTime, booking.endTime);
     setCancelOpen(false);
     setBooking(null);
     setRescheduling(false);
     setDateId(null);
     setSlotId(null);
-    setNotice(`ยกเลิกการจอง${d.fullLabel} เวลา ${timeRange(booking.startTime, booking.endTime)} เรียบร้อยแล้ว เลือกวันและเวลาใหม่ได้ด้านล่าง`);
+    setNotice(`ยกเลิกการจอง${d.fullLabel} เวลา ${oldRange} เรียบร้อยแล้ว เลือกวันและเวลาใหม่ได้ด้านล่าง`);
     reloadSlots().catch(() => { });
     refreshSelectedStudentDetail();
   };
@@ -516,36 +587,52 @@ function Booking() {
     </main>
   );
 
+  const loadingSkeleton = (
+    <div aria-busy="true" aria-label="กำลังโหลดข้อมูลการจอง" style={{ display: "grid", gap: 16 }}>
+      <div className="bk-skel" style={{ height: 70, maxWidth: 420 }} />
+      <div className="bk-layout">
+        <div style={{ display: "grid", gap: 18 }}>
+          <div className="bk-skel" style={{ height: 120 }} />
+          <div className="bk-skel" style={{ height: 150 }} />
+          <div className="bk-skel" style={{ height: 180 }} />
+        </div>
+        <div className="bk-skel" style={{ height: 300 }} />
+      </div>
+    </div>
+  );
+
+  /* ---------- รอสถานะคำร้องล่าสุด ---------- */
+  if (!detailReady) {
+    return shell(loadingSkeleton);
+  }
+
   /* ---------- ดำเนินการเสร็จแล้ว ---------- */
   if (isFinished) {
     return shell(
       <StateCard icon={<IconCheckCircle />} title="ยื่นเอกสารฉบับจริงเรียบร้อยแล้ว"
-        text="คำขอของคุณผ่านขั้นตอนนัดหมายแล้ว ไม่ต้องจองวันเวลาเพิ่ม ติดตามสถานะได้ที่หน้าคำขอกู้ยืม" />,
+        text="คำขอของคุณผ่านขั้นตอนนัดหมายแล้ว ไม่ต้องจองวันเวลาเพิ่ม"
+        action={
+          <button type="button" className="bk-cta" onClick={() => goTo("status")} style={primaryCtaStyle}>
+            ดูสถานะคำขอ
+          </button>
+        }
+      />,
       900,
     );
   }
 
-  /* ---------- ยังไม่ผ่านการคัดกรอง ---------- */
+  /* ---------- ยังจองไม่ได้ (แยกข้อความตามสถานะจริง) ---------- */
   if (!canBook) {
+    const info = lockedInfoOf(statusCode);
     return shell(
       <StateCard
         icon={<span style={{ color: C.navy }}><IconLock /></span>}
-        title="ยังไม่สามารถจองได้"
-        text={
-          <>
-            คุณต้องยื่นคำขอกู้ยืมเงิน กยศ. และผ่านการคัดกรองเอกสารก่อน จึงจะสามารถจองวันเวลาเข้ารับบริการได้
-            {selectedStudent?.eligibilityStatus === "PENDING" && " ขณะนี้คำขอของคุณอยู่ระหว่างการตรวจสอบ"}
-            {selectedStudent?.eligibilityStatus === "FAILED" && " คำขอของคุณไม่ผ่านการคัดกรอง กรุณาตรวจสอบและยื่นเอกสารใหม่"}
-          </>
-        }
+        title={info.title}
+        text={info.text}
         action={
-          <a href="#!" onClick={(e) => e.preventDefault()} className="bk-cta" style={{
-            display: "inline-block", background: `linear-gradient(180deg, #2A3B8C, ${C.navy})`, color: "#fff",
-            textDecoration: "none", fontWeight: 600, fontSize: ".92rem", padding: "12px 26px", borderRadius: 999,
-            boxShadow: SHADOW_ACTIVE,
-          }}>
-            ไปหน้าคำขอกู้ยืมเงิน กยศ.
-          </a>
+          <button type="button" className="bk-cta" onClick={() => goTo(info.page)} style={primaryCtaStyle}>
+            {info.label}
+          </button>
         }
       />,
       900,
@@ -562,19 +649,7 @@ function Booking() {
 
   /* ---------- กำลังโหลด / โหลดไม่สำเร็จ ---------- */
   if (loadState.status === "loading") {
-    return shell(
-      <div aria-busy="true" aria-label="กำลังโหลดข้อมูลการจอง" style={{ display: "grid", gap: 16 }}>
-        <div className="bk-skel" style={{ height: 70, maxWidth: 420 }} />
-        <div className="bk-layout">
-          <div style={{ display: "grid", gap: 18 }}>
-            <div className="bk-skel" style={{ height: 120 }} />
-            <div className="bk-skel" style={{ height: 150 }} />
-            <div className="bk-skel" style={{ height: 180 }} />
-          </div>
-          <div className="bk-skel" style={{ height: 300 }} />
-        </div>
-      </div>,
-    );
+    return shell(loadingSkeleton);
   }
 
   if (loadState.status === "error") {
@@ -582,11 +657,7 @@ function Booking() {
       <StateCard icon={<span style={{ color: C.red }}><IconInfo /></span>} title="โหลดข้อมูลการจองไม่สำเร็จ"
         text={loadState.message}
         action={
-          <button type="button" className="bk-cta" onClick={retryLoad} style={{
-            background: `linear-gradient(180deg, #2A3B8C, ${C.navy})`, color: "#fff", border: "none",
-            fontWeight: 600, fontSize: ".92rem", padding: "12px 26px", borderRadius: 999, cursor: "pointer",
-            boxShadow: SHADOW_ACTIVE,
-          }}>
+          <button type="button" className="bk-cta" onClick={retryLoad} style={primaryCtaStyle}>
             ลองใหม่
           </button>
         }
@@ -687,6 +758,12 @@ function Booking() {
               </button>
             </div>
           )}
+
+          <div style={{ textAlign: "center" }}>
+            <button type="button" className="bk-link" onClick={() => goTo("status")}>
+              กลับหน้าติดตามสถานะ
+            </button>
+          </div>
         </div>
 
         {cancelOpen && (
@@ -713,7 +790,7 @@ function Booking() {
           background: "linear-gradient(100deg, #E6F1FF, #F1F6FF)", border: "1px solid #C9DEFB",
         }}>
           <span style={{ flexShrink: 0, marginTop: 1 }}><IconInfo /></span>
-          <span>คำขอกู้ยืมของคุณผ่านการตรวจสอบแล้ว กรุณาเลือกวันและเวลาเพื่อยื่นเอกสารฉบับจริงตามนัดหมาย</span>
+          <span>เอกสารของคุณผ่านการตรวจสอบแล้ว กรุณาเลือกวันและเวลาเพื่อยื่นเอกสารฉบับจริงตามนัดหมาย</span>
         </div>
       </section>
 

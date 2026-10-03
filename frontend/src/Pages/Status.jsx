@@ -2,20 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "../context/AppContext";
 
 /**
- * หน้าติดตามสถานะ (นักศึกษา)
- * - สถานะปัจจุบัน 6 ขั้น: ยื่นคำขอ > คัดกรองคุณสมบัติ > อัปโหลดเอกสาร >
- *   ตรวจสอบเอกสาร > จองคิว > ส่งเอกสารสำเร็จ
- * - ประวัติคำขอ: แท็บ "คำขอปัจจุบัน" และ "คำขอที่สำเร็จแล้ว" + กรองปีการศึกษา/ประเภทผู้กู้
+ * หน้าติดตามสถานะ (นักศึกษา) — ออกแบบใหม่
+ * - ส่วนบน: บอก "ขั้นถัดไปที่ต้องทำ" ชัดๆ พร้อมปุ่ม + แถบความคืบหน้า 6 ขั้น
+ * - เอกสาร: แสดงเฉพาะฉบับล่าสุดของแต่ละเอกสาร (ประวัติการส่งก่อนหน้ากดดูได้)
+ * - ประวัติสถานะคำขอ + คำขออื่นๆ ย้อนหลัง
  *
- * ใช้ API ที่มีอยู่แล้ว: GET /api/student/:id และ GET /api/student
+ * ใช้ API เดิม: GET /api/student/:id และ GET /api/student
  */
 
-/* ---------- ตั้งค่า (แก้ตรงนี้ถ้าจำเป็น) ---------- */
+/* ---------- ตั้งค่า ---------- */
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
-
-// ชื่อหน้าที่ใช้ตอนกดปุ่มไปหน้าอื่น (ต้องตรงกับชื่อหน้าใน App.jsx ถ้าปุ่มไม่พาไป ให้แก้ตรงนี้)
-const BOOKING_PAGE_KEY = "booking";
-const UPLOAD_PAGE_KEY = "uploadDocuments";
 
 function getToken() {
     for (const key of ["token", "accessToken", "authToken", "jwt"]) {
@@ -27,32 +23,30 @@ function getToken() {
 
 const C = {
     navy: "#1C2B74",
-    navyDark: "#101D5C",
+    navyDeep: "#101D5C",
     pink: "#E31C79",
     ink: "#1B2142",
     muted: "#5B6485",
     faint: "#8A93AD",
     line: "#E3E8F4",
-    soft: "#F1F4FB",
-    red: "#D6335A",
-    redBg: "#FFF1F4",
-    green: "#159A60",
-    greenBg: "#E8FBF1",
-    amber: "#8A5A06",
-    amberBg: "#FFF6E5",
+    wash: "#F4F6FB",
+    green: "#138A57",
+    greenBg: "#E7F7EF",
+    amber: "#9A6408",
+    amberBg: "#FFF5E2",
+    red: "#C42D52",
+    redBg: "#FFF0F3",
 };
 const HEAD = "'Prompt', 'Sarabun', sans-serif";
-const SHADOW_CARD = "0 10px 30px -14px rgba(16,29,92,.18)";
-const SHADOW_ACTIVE = "0 10px 22px -10px rgba(28,43,116,.6)";
 
 /* ---------- ข้อมูลคงที่ ---------- */
 const STEPS = [
-    { n: 1, label: "กรอกข้อมูลส่วนตัว", hint: "กำลังบันทึกคำขอ" },
-    { n: 2, label: "คัดกรองคุณสมบัติ", hint: "กำลังคัดกรองคุณสมบัติ" },
-    { n: 3, label: "อัปโหลดเอกสาร", hint: "อัปโหลดเอกสารให้ครบ" },
-    { n: 4, label: "ตรวจสอบเอกสาร", hint: "รอเจ้าหน้าที่ตรวจสอบ" },
-    { n: 5, label: "จองคิว", hint: "เลือกวันเวลายื่นเอกสาร" },
-    { n: 6, label: "ส่งเอกสารสำเร็จ", hint: "ไปยื่นเอกสารฉบับจริงตามนัด" },
+    { n: 1, label: "กรอกข้อมูลส่วนตัว" },
+    { n: 2, label: "คัดกรองคุณสมบัติ" },
+    { n: 3, label: "อัปโหลดเอกสาร" },
+    { n: 4, label: "ตรวจสอบเอกสาร" },
+    { n: 5, label: "จองคิว" },
+    { n: 6, label: "ยื่นเอกสารฉบับจริง" },
 ];
 
 const STATUS_TH = {
@@ -70,11 +64,12 @@ const STATUS_TH = {
     CANCELLED: "ยกเลิก",
 };
 
-const DOC_STATUS_TH = {
-    PENDING: "รอตรวจ",
-    APPROVED: "ผ่าน",
-    REVISION_REQUIRED: "ต้องแก้ไข",
-    REJECTED: "ไม่ผ่าน",
+const DOC_STATUS = {
+    PENDING: { label: "รอตรวจ", bg: "#EEF1FB", color: C.navy },
+    APPROVED: { label: "ผ่าน", bg: C.greenBg, color: C.green },
+    REVISION_REQUIRED: { label: "ต้องแก้ไข", bg: C.amberBg, color: C.amber },
+    REJECTED: { label: "ไม่ผ่าน", bg: C.redBg, color: C.red },
+    MISSING: { label: "ยังไม่ได้ส่ง", bg: C.amberBg, color: C.amber },
 };
 
 const DONE_STATUSES = ["SIGNED", "CENTRAL_SUBMITTED", "COMPLETED"];
@@ -161,6 +156,72 @@ function stepState(n, progress) {
     return "idle";
 }
 
+// "ขั้นถัดไป" ที่นักศึกษาต้องทำ แยกตามสถานะคำร้อง
+function nextStepOf(status, docsComplete, revisionCount) {
+    switch (status) {
+        case "DRAFT":
+        case "SUBMITTED":
+        case "ELIGIBILITY_REVIEW":
+            return {
+                title: "คัดกรองคุณสมบัติ",
+                text: "กรอก GPAX และชั่วโมงจิตอาสา พร้อมแนบหลักฐาน เพื่อไปขั้นตอนอัปโหลดเอกสาร",
+                cta: { label: "ไปคัดกรองคุณสมบัติ", page: "eligibility" },
+            };
+        case "ELIGIBILITY_FAILED":
+            return {
+                title: "คำขอไม่ผ่านการคัดกรอง",
+                text: "GPAX หรือชั่วโมงจิตอาสายังไม่ถึงเกณฑ์ หากมีข้อสงสัยกรุณาติดต่อเจ้าหน้าที่ กยศ.",
+                cta: null,
+            };
+        case "DOCUMENT_REVIEW":
+            return docsComplete === false
+                ? {
+                    title: "อัปโหลดเอกสารให้ครบ",
+                    text: "ยังมีเอกสารที่ต้องส่ง ส่งให้ครบทุกรายการ เจ้าหน้าที่จึงจะเริ่มตรวจได้",
+                    cta: { label: "อัปโหลดเอกสาร", page: "uploadDocuments" },
+                }
+                : {
+                    title: "รอเจ้าหน้าที่ตรวจเอกสาร",
+                    text: "ส่งเอกสารครบแล้ว ไม่ต้องทำอะไรเพิ่มในตอนนี้ เมื่อตรวจผ่านจะจองวันยื่นเอกสารได้ทันที",
+                    cta: null,
+                };
+        case "REVISION_REQUIRED":
+            return {
+                title: revisionCount > 0 ? `แก้ไขเอกสาร ${revisionCount} รายการ` : "แก้ไขเอกสาร",
+                text: "เจ้าหน้าที่ให้แก้ไขเอกสารบางรายการ ดูเหตุผลด้านล่าง แล้วส่งไฟล์ใหม่",
+                cta: { label: "แก้ไขเอกสาร", page: "uploadDocuments", tone: "amber" },
+            };
+        case "DOCUMENT_APPROVED":
+            return {
+                title: "จองวันเวลายื่นเอกสาร",
+                text: "เอกสารผ่านการตรวจสอบครบแล้ว เลือกวันและเวลาที่สะดวกมายื่นเอกสารฉบับจริง",
+                cta: { label: "จองคิว", page: "booking" },
+            };
+        case "QUEUE_BOOKED":
+            return {
+                title: "ไปยื่นเอกสารฉบับจริงตามนัด",
+                text: "นำเอกสารฉบับจริงไปยื่นภายในช่วงเวลาที่จองไว้ เปลี่ยนหรือยกเลิกนัดได้ที่หน้านัดหมาย",
+                cta: { label: "ดูนัดหมาย", page: "booking" },
+            };
+        case "SIGNED":
+        case "CENTRAL_SUBMITTED":
+        case "COMPLETED":
+            return {
+                title: "ยื่นเอกสารเรียบร้อยแล้ว",
+                text: "คำขอกู้ยืมของภาคการศึกษานี้ดำเนินการครบทุกขั้นตอนแล้ว",
+                cta: null,
+            };
+        case "CANCELLED":
+            return {
+                title: "คำขอนี้ถูกยกเลิกแล้ว",
+                text: "หากต้องการกู้ยืม กรุณายื่นคำขอใหม่",
+                cta: null,
+            };
+        default:
+            return { title: "-", text: "", cta: null };
+    }
+}
+
 function buildTimeline(detail) {
     return (detail?.statusHistory || [])
         .map((h) => ({
@@ -173,15 +234,30 @@ function buildTimeline(detail) {
         .sort((a, b) => new Date(b.at) - new Date(a.at));
 }
 
+// รวมการส่งเอกสารเป็นกลุ่มตามชื่อเอกสาร: ฉบับล่าสุด + ฉบับก่อนหน้า
+function groupSubmissions(rows) {
+    const map = new Map();
+    for (const r of rows || []) {
+        const key = r.documentName || r.documentId;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(r);
+    }
+    return [...map.entries()].map(([name, list]) => {
+        const sorted = [...list].sort((a, b) => (b.versionNo || 0) - (a.versionNo || 0));
+        const latest = sorted.find((r) => r.isCurrent) || sorted[0];
+        return { name, latest, older: sorted.filter((r) => r !== latest) };
+    });
+}
+
 /* ---------- ไอคอน ---------- */
-function IconCheck({ size = 16 }) {
+function IconCheck({ size = 14 }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
 }
-function IconCross({ size = 16 }) {
+function IconCross({ size = 14 }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
@@ -191,7 +267,7 @@ function IconCross({ size = 16 }) {
 function IconChevron({ open }) {
     return (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-            style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>
+            style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s", flexShrink: 0 }}>
             <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
@@ -199,150 +275,224 @@ function IconChevron({ open }) {
 
 /* ---------- css ---------- */
 const css = `
-.st { position: relative; isolation: isolate; }
-.st::before, .st::after { content: ""; position: absolute; z-index: -1; border-radius: 50%; filter: blur(70px); pointer-events: none; }
-.st::before { width: 420px; height: 420px; top: -80px; left: -120px; background: rgba(90,120,255,.16); }
-.st::after { width: 380px; height: 380px; top: 260px; right: -120px; background: rgba(227,28,121,.10); }
-.st button:focus-visible, .st select:focus-visible { outline: 3px solid ${C.pink}; outline-offset: 2px; }
-.st-steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
-.st-cta { transition: transform .15s, box-shadow .15s; }
-.st-cta:hover:not(:disabled) { transform: translateY(-1px); }
-@keyframes st-shimmer { 0% { background-position: -300px 0; } 100% { background-position: 300px 0; } }
-.st-skel { background: linear-gradient(90deg, ${C.soft} 0, #E6ECF7 60px, ${C.soft} 120px); background-size: 600px 100%; animation: st-shimmer 1.2s infinite linear; border-radius: 12px; }
-@media (max-width: 900px) { .st-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (prefers-reduced-motion: reduce) { .st * { transition: none !important; animation: none !important; } }
+.sx { max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; font-family: 'Sarabun', sans-serif; color: ${C.ink}; display: grid; gap: 20px; }
+.sx h1, .sx h2, .sx h3 { font-family: ${HEAD}; margin: 0; }
+.sx button { font-family: inherit; }
+.sx button:focus-visible, .sx select:focus-visible { outline: 3px solid ${C.pink}; outline-offset: 2px; }
+
+/* ---- hero ---- */
+.sx-hero { background: linear-gradient(135deg, ${C.navy}, ${C.navyDeep}); color: #fff; border-radius: 22px; padding: clamp(22px, 4vw, 34px); display: grid; gap: 30px; }
+.sx-hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; flex-wrap: wrap; }
+.sx-kicker { font-size: .84rem; color: #B9C4F2; font-weight: 600; margin: 0 0 6px; }
+.sx-next { font-size: clamp(1.5rem, 3.6vw, 2.05rem); font-weight: 700; line-height: 1.25; margin: 0 0 8px; }
+.sx-next-text { margin: 0; color: #D7DEF8; max-width: 52ch; line-height: 1.7; font-size: .95rem; }
+.sx-cta { margin-top: 18px; display: inline-flex; align-items: center; gap: 8px; border: none; border-radius: 12px; padding: 12px 24px; font-weight: 700; font-size: .95rem; cursor: pointer; background: ${C.pink}; color: #fff; transition: transform .15s; }
+.sx-cta:hover { transform: translateY(-1px); }
+.sx-cta.is-amber { background: #F2B233; color: #2B1B00; }
+.sx-meta { margin: 0; display: grid; gap: 12px; min-width: 230px; padding: 16px 18px; border-radius: 14px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); }
+.sx-meta dt { font-size: .74rem; color: #A9B5E6; }
+.sx-meta dd { margin: 2px 0 0; font-weight: 600; font-size: .92rem; }
+
+/* ---- progress rail ---- */
+.sx-rail { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.sx-node { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 0 4px; }
+.sx-node + .sx-node::before { content: ""; position: absolute; top: 15px; right: 50%; width: 100%; height: 2px; background: rgba(255,255,255,.18); }
+.sx-node.is-done::before, .sx-node.is-active::before, .sx-node.is-revision::before, .sx-node.is-failed::before { background: #fff; }
+.sx-dot { position: relative; z-index: 1; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-family: ${HEAD}; font-weight: 700; font-size: .86rem; }
+.is-done .sx-dot { background: #fff; color: ${C.navy}; }
+.is-active .sx-dot { background: ${C.pink}; color: #fff; box-shadow: 0 0 0 6px rgba(227,28,121,.28); }
+.is-revision .sx-dot { background: #F2B233; color: #2B1B00; box-shadow: 0 0 0 6px rgba(242,178,51,.28); }
+.is-failed .sx-dot { background: #F0567A; color: #fff; }
+.is-idle .sx-dot { background: ${C.navyDeep}; color: #8E9AD0; border: 2px solid rgba(255,255,255,.22); }
+.sx-lbl { font-size: .84rem; font-weight: 600; color: #fff; line-height: 1.35; }
+.is-idle .sx-lbl { color: #8E9AD0; font-weight: 500; }
+
+/* ---- panels ---- */
+.sx-panel { background: #fff; border: 1px solid ${C.line}; border-radius: 18px; padding: clamp(18px, 3vw, 26px); }
+.sx-panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.sx-h2 { font-size: 1.15rem; font-weight: 700; }
+.sx-h3 { font-size: .98rem; font-weight: 700; margin-bottom: 4px !important; }
+.sx-sub { color: ${C.muted}; font-size: .88rem; }
+
+.sx-detail { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 32px; align-items: start; }
+
+/* ---- documents ---- */
+.sx-docs { list-style: none; margin: 0; padding: 0; }
+.sx-doc { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding: 14px 0; border-top: 1px solid ${C.line}; }
+.sx-doc:first-child { border-top: none; }
+.sx-doc-main { min-width: 0; flex: 1; }
+.sx-doc-name { font-weight: 700; font-size: .95rem; }
+.sx-doc-meta { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 3px; font-size: .8rem; color: ${C.muted}; }
+.sx-file { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-remark { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: ${C.redBg}; color: ${C.red}; font-size: .84rem; font-weight: 600; }
+.sx-more { background: none; border: none; padding: 6px 0 0; color: ${C.navy}; font-size: .8rem; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.sx-versions { list-style: none; margin: 8px 0 0; padding: 2px 0 2px 12px; border-left: 2px solid ${C.line}; display: grid; gap: 8px; }
+.sx-versions li { font-size: .8rem; color: ${C.muted}; }
+.sx-versions strong { color: ${C.ink}; font-weight: 600; }
+.sx-chip { flex-shrink: 0; font-size: .76rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; white-space: nowrap; }
+
+/* ---- timeline ---- */
+.sx-tl { list-style: none; margin: 10px 0 0; padding: 0; }
+.sx-tl li { position: relative; padding: 0 0 16px 22px; }
+.sx-tl li::before { content: ""; position: absolute; left: 4px; top: 14px; bottom: -2px; width: 2px; background: ${C.line}; }
+.sx-tl li:last-child::before { display: none; }
+.sx-tl-dot { position: absolute; left: 0; top: 6px; width: 10px; height: 10px; border-radius: 50%; }
+.sx-tl-title { font-size: .88rem; font-weight: 600; }
+.sx-tl-at { font-size: .76rem; color: ${C.faint}; }
+.sx-tl-note { font-size: .82rem; color: ${C.muted}; margin-top: 2px; }
+
+/* ---- history ---- */
+.sx-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 12px; }
+.sx-tab { border: 1.5px solid ${C.line}; background: #fff; color: ${C.ink}; font-weight: 600; font-size: .86rem; padding: 8px 16px; border-radius: 10px; cursor: pointer; }
+.sx-tab[aria-selected="true"] { background: ${C.navy}; border-color: ${C.navy}; color: #fff; }
+.sx-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.sx-filters label { display: grid; gap: 4px; font-size: .76rem; color: ${C.faint}; }
+.sx-filters select { border: 1.5px solid ${C.line}; border-radius: 10px; padding: 8px 12px; background: #fff; font-family: inherit; font-size: .88rem; color: ${C.ink}; min-width: 160px; }
+.sx-app { border: 1px solid ${C.line}; border-radius: 14px; overflow: hidden; }
+.sx-app + .sx-app { margin-top: 10px; }
+.sx-app-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: none; border: none; cursor: pointer; text-align: left; color: ${C.ink}; }
+.sx-app-title { font-family: ${HEAD}; font-weight: 700; font-size: .96rem; }
+.sx-app-body { border-top: 1px solid ${C.line}; padding: 18px 16px; background: ${C.wash}; }
+.sx-empty { border-radius: 12px; background: ${C.wash}; padding: 18px 16px; color: ${C.faint}; font-size: .9rem; text-align: center; }
+
+@keyframes sx-shimmer { 0% { background-position: -300px 0; } 100% { background-position: 300px 0; } }
+.sx-skel { background: linear-gradient(90deg, ${C.wash} 0, #E6ECF7 60px, ${C.wash} 120px); background-size: 600px 100%; animation: sx-shimmer 1.2s infinite linear; border-radius: 14px; }
+
+@media (max-width: 880px) {
+  .sx-detail { grid-template-columns: 1fr; gap: 22px; }
+}
+@media (max-width: 720px) {
+  .sx-rail { grid-template-columns: 1fr; gap: 0; }
+  .sx-node { flex-direction: row; text-align: left; gap: 14px; padding: 8px 0; }
+  .sx-node + .sx-node::before { top: -50%; right: auto; left: 15px; width: 2px; height: 100%; }
+  .sx-meta { width: 100%; }
+  .sx-file { max-width: 180px; }
+}
+@media (prefers-reduced-motion: reduce) { .sx * { transition: none !important; animation: none !important; } }
 `;
 
-const cardStyle = {
-    background: "linear-gradient(180deg, #FFFFFF, #FBFCFF)",
-    border: `1px solid ${C.line}`,
-    borderRadius: 18,
-    boxShadow: SHADOW_CARD,
-};
-
 /* ---------- ส่วนประกอบย่อย ---------- */
-function StepBox({ step, state, children }) {
-    const palette = {
-        done: { bg: C.greenBg, border: "#BFEBD4", circle: C.green, text: C.green },
-        active: { bg: "#EEF2FF", border: C.navy, circle: C.navy, text: C.navy },
-        revision: { bg: C.amberBg, border: "#F5D9A3", circle: "#D98E04", text: C.amber },
-        failed: { bg: C.redBg, border: "#F7C6D0", circle: C.red, text: C.red },
-        idle: { bg: "#fff", border: C.line, circle: "#C6CEE2", text: C.faint },
-    }[state];
+function Chip({ status }) {
+    const s = DOC_STATUS[status] || DOC_STATUS.PENDING;
+    return <span className="sx-chip" style={{ background: s.bg, color: s.color }}>{s.label}</span>;
+}
 
-    const hintText =
-        state === "done" ? "เสร็จแล้ว"
-            : state === "active" ? step.hint
-                : state === "revision" ? "มีเอกสารต้องแก้ไข"
-                    : state === "failed" ? "ไม่ผ่านเกณฑ์"
-                        : "";
+function reviewerText(r) {
+    if (r.reviewedByName) return `ตรวจโดย ${r.reviewedByName} · ${formatDateTime(r.reviewedAt)}`;
+    if (r.status === "APPROVED") return "ระบบตรวจอัตโนมัติ";
+    return "รอเจ้าหน้าที่ตรวจ";
+}
+
+function DocumentRow({ group }) {
+    const [showOlder, setShowOlder] = useState(false);
+    const r = group.latest;
+    const sentBack = r.status === "REVISION_REQUIRED" || r.status === "REJECTED";
 
     return (
-        <div style={{
-            display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 8,
-            padding: "16px 10px 14px", borderRadius: 16, minHeight: 150, boxSizing: "border-box",
-            background: palette.bg, border: `${state === "active" ? 2 : 1}px solid ${palette.border}`,
-            boxShadow: state === "active" ? "0 0 0 4px rgba(28,43,116,.06)" : "none",
-        }}>
-            <span style={{
-                width: 40, height: 40, borderRadius: "50%", display: "grid", placeItems: "center",
-                background: palette.circle, color: "#fff", fontFamily: HEAD, fontWeight: 700, fontSize: "1rem",
-            }}>
-                {state === "done" ? <IconCheck /> : state === "failed" ? <IconCross /> : step.n}
-            </span>
-            <strong style={{ fontFamily: HEAD, fontSize: ".9rem", color: state === "idle" ? C.muted : C.ink }}>{step.label}</strong>
-            {hintText && <span style={{ fontSize: ".76rem", color: palette.text, fontWeight: 600 }}>{hintText}</span>}
-            {children}
+        <li className="sx-doc">
+            <div className="sx-doc-main">
+                <div className="sx-doc-name">{group.name}</div>
+                <div className="sx-doc-meta">
+                    <span className="sx-file" title={r.fileName}>{r.fileName}</span>
+                    <span>ส่งครั้งที่ {r.versionNo} · {formatDateTime(r.uploadedAt)}</span>
+                </div>
+                <div className="sx-doc-meta">{reviewerText(r)}</div>
+                {r.remark && (
+                    <p className="sx-remark" style={sentBack ? undefined : { background: C.wash, color: C.muted }}>
+                        {sentBack ? "เหตุผล: " : "หมายเหตุ: "}{r.remark}
+                    </p>
+                )}
+
+                {group.older.length > 0 && (
+                    <>
+                        <button type="button" className="sx-more" aria-expanded={showOlder} onClick={() => setShowOlder((v) => !v)}>
+                            {showOlder ? "ซ่อนการส่งก่อนหน้า" : `ดูการส่งก่อนหน้า (${group.older.length})`}
+                        </button>
+                        {showOlder && (
+                            <ol className="sx-versions">
+                                {group.older.map((o) => (
+                                    <li key={o.documentId}>
+                                        <strong>ครั้งที่ {o.versionNo}</strong> · {formatDateTime(o.uploadedAt)} · {DOC_STATUS[o.status]?.label || o.status}
+                                        {o.remark && <> · เหตุผล: {o.remark}</>}
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                    </>
+                )}
+            </div>
+            <Chip status={r.status} />
+        </li>
+    );
+}
+
+function DocumentList({ detail }) {
+    const groups = useMemo(() => groupSubmissions(detail?.documentSubmissions), [detail]);
+    const missing = (detail?.requiredDocuments || []).filter((d) => d.status === "ยังไม่อัปโหลด");
+    const approved = groups.filter((g) => g.latest.status === "APPROVED").length;
+    const total = groups.length + missing.length;
+
+    return (
+        <div>
+            <div className="sx-panel-head">
+                <h3 className="sx-h3">เอกสาร</h3>
+                {total > 0 && <span className="sx-sub">ผ่านแล้ว {approved} จาก {total} รายการ</span>}
+            </div>
+
+            {total === 0 ? (
+                <div className="sx-empty">ยังไม่มีการส่งเอกสาร</div>
+            ) : (
+                <ul className="sx-docs">
+                    {missing.map((d) => (
+                        <li key={`m-${d.requirementId}`} className="sx-doc">
+                            <div className="sx-doc-main">
+                                <div className="sx-doc-name">{d.documentType}</div>
+                                <div className="sx-doc-meta">ยังไม่ได้แนบไฟล์</div>
+                            </div>
+                            <Chip status="MISSING" />
+                        </li>
+                    ))}
+                    {groups.map((g) => <DocumentRow key={g.name} group={g} />)}
+                </ul>
+            )}
         </div>
     );
 }
 
-function StatusBadge({ status }) {
-    let bg = "#EEF2FF";
-    let color = C.navy;
-    if (DONE_STATUSES.includes(status)) { bg = C.greenBg; color = C.green; }
-    else if (status === "REVISION_REQUIRED") { bg = C.amberBg; color = C.amber; }
-    else if (status === "ELIGIBILITY_FAILED" || status === "CANCELLED") { bg = C.redBg; color = C.red; }
+function Timeline({ detail }) {
+    const items = useMemo(() => buildTimeline(detail), [detail]);
     return (
-        <span style={{ background: bg, color, fontSize: ".76rem", fontWeight: 700, padding: "4px 12px", borderRadius: 999, whiteSpace: "nowrap" }}>
-            {STATUS_TH[status] || status}
-        </span>
-    );
-}
-
-const DOC_CHIP = {
-    PENDING: { bg: "#EEF2FF", color: C.navy },
-    APPROVED: { bg: C.greenBg, color: C.green },
-    REVISION_REQUIRED: { bg: C.amberBg, color: C.amber },
-    REJECTED: { bg: C.redBg, color: C.red },
-};
-
-function DocStatusChip({ status }) {
-    const style = DOC_CHIP[status] || DOC_CHIP.PENDING;
-    return (
-        <span style={{ background: style.bg, color: style.color, fontSize: ".74rem", fontWeight: 700, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
-            {DOC_STATUS_TH[status] || status}
-        </span>
-    );
-}
-
-const thStyle = { textAlign: "left", padding: "10px 12px", fontSize: ".76rem", color: C.faint, fontWeight: 700, whiteSpace: "nowrap", borderBottom: `1px solid ${C.line}`, background: "#fff" };
-const tdStyle = { padding: "10px 12px", fontSize: ".84rem", verticalAlign: "top", borderBottom: `1px solid ${C.line}` };
-
-function SubmissionsTable({ rows }) {
-    return (
-        <div style={{ overflowX: "auto", border: `1px solid ${C.line}`, borderRadius: 12, background: "#fff" }}>
-            <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse" }}>
-                <thead>
-                    <tr>
-                        <th style={thStyle}>เอกสาร</th>
-                        <th style={thStyle}>ส่งครั้งที่</th>
-                        <th style={thStyle}>ไฟล์</th>
-                        <th style={thStyle}>วันที่ส่ง</th>
-                        <th style={thStyle}>สถานะ</th>
-                        <th style={thStyle}>ผู้ตรวจ</th>
-                        <th style={thStyle}>หมายเหตุ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((r) => {
-                        const sentBack = r.status === "REVISION_REQUIRED" || r.status === "REJECTED";
-                        const autoApproved = r.status === "APPROVED" && !r.reviewedByName;
-                        return (
-                            <tr key={r.documentId}>
-                                <td style={tdStyle}>
-                                    <div style={{ fontWeight: 600 }}>{r.documentName}</div>
-                                    {r.isCurrent && <div style={{ fontSize: ".72rem", color: C.green, marginTop: 2 }}>ฉบับล่าสุด</div>}
-                                </td>
-                                <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>ครั้งที่ {r.versionNo}</td>
-                                <td style={{ ...tdStyle, maxWidth: 220, wordBreak: "break-all" }} title={r.fileName}>{r.fileName}</td>
-                                <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{formatDateTime(r.uploadedAt)}</td>
-                                <td style={tdStyle}><DocStatusChip status={r.status} /></td>
-                                <td style={tdStyle}>
-                                    {r.reviewedByName ? (
-                                        <>
-                                            <div>{r.reviewedByName}</div>
-                                            <div style={{ fontSize: ".72rem", color: C.faint }}>{formatDateTime(r.reviewedAt)}</div>
-                                        </>
-                                    ) : autoApproved ? (
-                                        <span style={{ color: C.muted }}>ระบบตรวจอัตโนมัติ</span>
-                                    ) : (
-                                        <span style={{ color: C.faint }}>-</span>
-                                    )}
-                                </td>
-                                <td style={{ ...tdStyle, minWidth: 180, color: sentBack ? C.red : C.muted, fontWeight: sentBack ? 600 : 400 }}>
-                                    {r.remark || "-"}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
+        <div>
+            <h3 className="sx-h3">ประวัติสถานะ</h3>
+            {items.length === 0 ? (
+                <div className="sx-empty" style={{ marginTop: 10 }}>ยังไม่มีประวัติ</div>
+            ) : (
+                <ol className="sx-tl">
+                    {items.map((ev) => (
+                        <li key={ev.key}>
+                            <span className="sx-tl-dot" style={{ background: ev.tone === "bad" ? C.red : C.green }} />
+                            <div className="sx-tl-title">{ev.title}</div>
+                            <div className="sx-tl-at">{formatDateTime(ev.at)}</div>
+                            {ev.note && <div className="sx-tl-note">{ev.note}</div>}
+                        </li>
+                    ))}
+                </ol>
+            )}
         </div>
     );
 }
 
-function ApplicationCard({ app, detail, defaultOpen, onOpen }) {
+function DetailBody({ detail }) {
+    if (!detail) return <div className="sx-skel" style={{ height: 120 }} />;
+    return (
+        <div className="sx-detail">
+            <DocumentList detail={detail} />
+            <Timeline detail={detail} />
+        </div>
+    );
+}
+
+function HistoryItem({ app, detail, onOpen, defaultOpen = false }) {
     const [open, setOpen] = useState(Boolean(defaultOpen));
     const id = app.application_id;
 
@@ -351,91 +501,25 @@ function ApplicationCard({ app, detail, defaultOpen, onOpen }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, id]);
 
-    const timeline = useMemo(() => buildTimeline(detail), [detail]);
-    const submissions = detail?.documentSubmissions || [];
-    const missing = (detail?.requiredDocuments || []).filter((d) => d.status === "ยังไม่อัปโหลด");
-
     return (
-        <div style={{ border: `1px solid ${C.line}`, borderRadius: 14, background: "#fff", overflow: "hidden" }}>
-            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-                style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
-                    background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit", color: C.ink,
-                }}>
+        <div className="sx-app">
+            <button type="button" className="sx-app-head" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: ".98rem" }}>
-                        ปีการศึกษา {app.academic_year} เทอม {app.semester}
-                    </div>
-                    <div style={{ fontSize: ".82rem", color: C.muted, marginTop: 2 }}>
-                        {app.loan_type_name} · ยื่นเมื่อ {formatDate(app.submitted_at || app.created_at)}
+                    <div className="sx-app-title">ปีการศึกษา {app.academic_year} เทอม {app.semester}</div>
+                    <div className="sx-sub" style={{ fontSize: ".82rem", marginTop: 2 }}>
+                        {app.loan_type_name} · ยื่นเมื่อ {formatDate(app.submitted_at || app.created_at)} · {STATUS_TH[app.application_status] || app.application_status}
                     </div>
                 </div>
-                <StatusBadge status={app.application_status} />
                 <IconChevron open={open} />
             </button>
-
             {open && (
-                <div style={{ borderTop: `1px solid ${C.line}`, padding: "16px", background: C.soft, display: "grid", gap: 18 }}>
-                    {!detail ? (
-                        <div className="st-skel" style={{ height: 90 }} />
-                    ) : (
-                        <>
-                            <div>
-                                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: ".88rem", marginBottom: 8 }}>ประวัติการส่งเอกสาร</div>
-                                {submissions.length === 0 ? (
-                                    <div style={{ color: C.faint, fontSize: ".84rem" }}>ยังไม่มีการส่งเอกสาร</div>
-                                ) : (
-                                    <SubmissionsTable rows={submissions} />
-                                )}
-                                {missing.length > 0 && (
-                                    <div style={{ marginTop: 10, background: C.amberBg, border: "1px solid #F5D9A3", color: C.amber, borderRadius: 10, padding: "9px 12px", fontSize: ".82rem", fontWeight: 600 }}>
-                                        ยังไม่ได้ส่ง: {missing.map((d) => d.documentType).join(", ")}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div>
-                                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: ".88rem", marginBottom: 8 }}>ประวัติสถานะคำขอ</div>
-                                {timeline.length === 0 ? (
-                                    <div style={{ color: C.faint, fontSize: ".84rem" }}>ยังไม่มีประวัติ</div>
-                                ) : (
-                                    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
-                                        {timeline.map((ev) => (
-                                            <li key={ev.key} style={{ display: "flex", gap: 10 }}>
-                                                <span style={{
-                                                    width: 10, height: 10, borderRadius: "50%", marginTop: 6, flexShrink: 0,
-                                                    background: ev.tone === "bad" ? C.red : C.green,
-                                                }} />
-                                                <div style={{ minWidth: 0 }}>
-                                                    <div style={{ fontSize: ".86rem", fontWeight: 600 }}>{ev.title}</div>
-                                                    <div style={{ fontSize: ".76rem", color: C.faint }}>{formatDateTime(ev.at)}</div>
-                                                    {ev.note && <div style={{ fontSize: ".82rem", color: C.muted, marginTop: 2 }}>{ev.note}</div>}
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ol>
-                                )}
-                            </div>
-                        </>
-                    )}
+                <div className="sx-app-body">
+                    <DetailBody detail={detail} />
                 </div>
             )}
         </div>
     );
 }
-
-function EmptyBox({ children }) {
-    return (
-        <div style={{ borderRadius: 12, background: C.soft, border: `1px dashed ${C.line}`, padding: "18px 16px", color: C.faint, fontSize: ".9rem", textAlign: "center" }}>
-            {children}
-        </div>
-    );
-}
-
-const selectStyle = {
-    border: `1.5px solid ${C.line}`, borderRadius: 10, padding: "8px 12px", background: "#fff",
-    fontFamily: "'Sarabun', sans-serif", fontSize: ".88rem", color: C.ink, minWidth: 160,
-};
 
 /* ================================================================ */
 
@@ -502,29 +586,30 @@ function Status({ setPage } = {}) {
             appContext.setPage ||
             appContext.navigateTo ||
             appContext.navigate;
-        if (typeof nav === "function") {
-            nav(pageKey);
-        } else {
-            window.location.assign(`/${pageKey}`);
-        }
+        if (typeof nav === "function") nav(pageKey);
+        else window.location.assign(`/${pageKey}`);
     };
-    const goToBooking = () => goToPage(BOOKING_PAGE_KEY);
-    const goToUpload = () => goToPage(UPLOAD_PAGE_KEY);
 
     const selectedApp = apps.find((a) => String(a.application_id) === String(applicationId));
     const selectedDetail = details[applicationId];
+    const status = selectedApp?.application_status;
     const docsComplete = selectedDetail?.requiredDocuments
         ? selectedDetail.requiredDocuments.every((d) => d.status !== "ยังไม่อัปโหลด")
         : null;
-    const progress = getProgress(selectedApp?.application_status, docsComplete);
+    const progress = getProgress(status, docsComplete);
     const revisionDocs = (selectedDetail?.requiredDocuments || []).filter(
         (d) => d.status === "REVISION_REQUIRED" || d.status === "REJECTED",
     );
+    const next = nextStepOf(status, docsComplete, revisionDocs.length);
 
-    const years = useMemo(() => [...new Set(apps.map((a) => a.academic_year))].sort().reverse(), [apps]);
-    const loanTypes = useMemo(() => [...new Set(apps.map((a) => a.loan_type_name))], [apps]);
-
-    const filtered = apps.filter((a) =>
+    // คำขออื่น (ไม่รวมคำขอปัจจุบันที่แสดงด้านบนแล้ว)
+    const others = useMemo(
+        () => apps.filter((a) => String(a.application_id) !== String(applicationId)),
+        [apps, applicationId],
+    );
+    const years = useMemo(() => [...new Set(others.map((a) => a.academic_year))].sort().reverse(), [others]);
+    const loanTypes = useMemo(() => [...new Set(others.map((a) => a.loan_type_name))], [others]);
+    const filtered = others.filter((a) =>
         (yearFilter === "ALL" || a.academic_year === yearFilter) &&
         (loanFilter === "ALL" || a.loan_type_name === loanFilter));
     const currentList = filtered.filter((a) => !DONE_STATUSES.includes(a.application_status));
@@ -532,7 +617,7 @@ function Status({ setPage } = {}) {
     const shownList = tab === "current" ? currentList : doneList;
 
     const shell = (children) => (
-        <main className="st" style={{ maxWidth: 1120, margin: "0 auto", padding: "34px 20px 64px", fontFamily: "'Sarabun', sans-serif", color: C.ink }}>
+        <main className="sx">
             <style>{css}</style>
             {children}
         </main>
@@ -540,186 +625,166 @@ function Status({ setPage } = {}) {
 
     if (!applicationId) {
         return shell(
-            <div style={{ ...cardStyle, padding: 32, textAlign: "center" }}>
-                <h1 style={{ fontFamily: HEAD, fontSize: "1.3rem", margin: "0 0 8px" }}>ยังไม่มีคำขอกู้ยืม</h1>
-                <p style={{ color: C.muted, margin: 0 }}>เมื่อยื่นคำขอกู้ยืมแล้ว จะติดตามสถานะได้ที่หน้านี้</p>
+            <div className="sx-panel" style={{ textAlign: "center", padding: 36 }}>
+                <h1 style={{ fontSize: "1.3rem", marginBottom: 8 }}>ยังไม่มีคำขอกู้ยืม</h1>
+                <p className="sx-sub" style={{ margin: "0 0 18px" }}>ยื่นคำขอกู้ยืมเงิน กยศ. แล้วติดตามความคืบหน้าได้ที่หน้านี้</p>
+                <button type="button" className="sx-cta" style={{ marginTop: 0 }} onClick={() => goToPage("eligibility")}>
+                    ไปหน้าคำขอกู้ยืมเงิน กยศ.
+                </button>
             </div>,
         );
     }
 
     if (load.status === "loading") {
         return shell(
-            <div aria-busy="true" aria-label="กำลังโหลดสถานะ" style={{ display: "grid", gap: 16 }}>
-                <div className="st-skel" style={{ height: 40, maxWidth: 260 }} />
-                <div className="st-skel" style={{ height: 160 }} />
-                <div className="st-skel" style={{ height: 240 }} />
+            <div aria-busy="true" aria-label="กำลังโหลดสถานะ" style={{ display: "grid", gap: 20 }}>
+                <div className="sx-skel" style={{ height: 300, borderRadius: 22 }} />
+                <div className="sx-skel" style={{ height: 260 }} />
             </div>,
         );
     }
 
     if (load.status === "error") {
         return shell(
-            <div style={{ ...cardStyle, padding: 32, textAlign: "center" }}>
-                <h1 style={{ fontFamily: HEAD, fontSize: "1.3rem", margin: "0 0 8px" }}>โหลดสถานะไม่สำเร็จ</h1>
-                <p style={{ color: C.muted, margin: "0 0 18px" }}>{load.message}</p>
-                <button type="button" className="st-cta" onClick={retry}
-                    style={{ background: `linear-gradient(180deg, #2A3B8C, ${C.navy})`, color: "#fff", border: "none", fontWeight: 600, padding: "11px 26px", borderRadius: 999, cursor: "pointer", boxShadow: SHADOW_ACTIVE }}>
-                    ลองใหม่
-                </button>
+            <div className="sx-panel" style={{ textAlign: "center", padding: 36 }}>
+                <h1 style={{ fontSize: "1.3rem", marginBottom: 8 }}>โหลดสถานะไม่สำเร็จ</h1>
+                <p className="sx-sub" style={{ margin: "0 0 18px" }}>{load.message}</p>
+                <button type="button" className="sx-cta" style={{ marginTop: 0 }} onClick={retry}>ลองใหม่</button>
             </div>,
         );
     }
 
     return shell(
         <>
-            {/* ---------- สถานะปัจจุบัน ---------- */}
-            <section style={{ ...cardStyle, padding: "clamp(18px, 3vw, 26px)", marginBottom: 22 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-                    <div>
-                        <h1 style={{ fontFamily: HEAD, fontWeight: 800, fontSize: "clamp(1.4rem, 3.5vw, 1.8rem)", margin: 0 }}>สถานะปัจจุบัน</h1>
-                        {selectedApp && (
-                            <p style={{ margin: "4px 0 0", color: C.muted, fontSize: ".9rem" }}>
-                                ปีการศึกษา {selectedApp.academic_year} เทอม {selectedApp.semester} · {selectedApp.loan_type_name}
-                            </p>
+            {/* ---------- ขั้นถัดไป + ความคืบหน้า ---------- */}
+            <section className="sx-hero" aria-labelledby="sx-next-title">
+                <div className="sx-hero-top">
+                    <div style={{ minWidth: 0, flex: "1 1 360px" }}>
+                        <p className="sx-kicker">
+                            {progress.mode === "done" || progress.mode === "cancelled" || progress.mode === "failed"
+                                ? "สถานะคำขอ"
+                                : "สิ่งที่ต้องทำต่อไป"}
+                        </p>
+                        <h1 id="sx-next-title" className="sx-next">{next.title}</h1>
+                        {next.text && <p className="sx-next-text">{next.text}</p>}
+                        {next.cta && (
+                            <button type="button" className={`sx-cta ${next.cta.tone === "amber" ? "is-amber" : ""}`}
+                                onClick={() => goToPage(next.cta.page)}>
+                                {next.cta.label}
+                            </button>
                         )}
                     </div>
-                    {selectedApp && <StatusBadge status={selectedApp.application_status} />}
+
+                    {selectedApp && (
+                        <dl className="sx-meta">
+                            <div>
+                                <dt>ภาคการศึกษา</dt>
+                                <dd>ปีการศึกษา {selectedApp.academic_year} เทอม {selectedApp.semester}</dd>
+                            </div>
+                            <div>
+                                <dt>ประเภทผู้กู้</dt>
+                                <dd>{selectedApp.loan_type_name}</dd>
+                            </div>
+                            <div>
+                                <dt>สถานะล่าสุด</dt>
+                                <dd>{STATUS_TH[status] || status || "-"}</dd>
+                            </div>
+                        </dl>
+                    )}
                 </div>
 
-                {progress.mode === "cancelled" && (
-                    <div role="status" style={{ background: C.redBg, border: "1px solid #F7C6D0", color: C.red, borderRadius: 12, padding: "12px 14px", marginBottom: 14, fontSize: ".9rem", fontWeight: 600 }}>
-                        คำขอนี้ถูกยกเลิกแล้ว
-                    </div>
-                )}
-                {progress.mode === "failed" && (
-                    <div role="status" style={{ background: C.redBg, border: "1px solid #F7C6D0", color: C.red, borderRadius: 12, padding: "12px 14px", marginBottom: 14, fontSize: ".9rem", fontWeight: 600 }}>
-                        คำขอไม่ผ่านการคัดกรองคุณสมบัติ กรุณาตรวจสอบข้อมูลแล้วยื่นคำขอใหม่
-                    </div>
-                )}
-
-                {revisionDocs.length > 0 && (
-                    <div role="alert" style={{ background: C.amberBg, border: "2px solid #F5D9A3", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                            <div style={{ fontFamily: HEAD, fontWeight: 700, color: C.amber }}>
-                                มีเอกสารที่ต้องแก้ไข {revisionDocs.length} รายการ
-                            </div>
-                            <button type="button" className="st-cta" onClick={goToUpload}
-                                style={{
-                                    border: "none", background: "linear-gradient(180deg, #E8A317, #D98E04)", color: "#fff",
-                                    fontFamily: HEAD, fontWeight: 700, fontSize: ".9rem", padding: "10px 22px", borderRadius: 999,
-                                    cursor: "pointer", boxShadow: "0 10px 22px -10px rgba(217,142,4,.7)",
-                                }}>
-                                แก้ไขเอกสาร
-                            </button>
-                        </div>
-                        <ul style={{ margin: "10px 0 0", padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
-                            {revisionDocs.map((d) => (
-                                <li key={d.requirementId} style={{ background: "#fff", border: "1px solid #F5D9A3", borderRadius: 10, padding: "9px 12px", fontSize: ".86rem" }}>
-                                    <div style={{ fontWeight: 700, color: C.ink }}>{d.documentType}</div>
-                                    {d.note && <div style={{ color: C.red, marginTop: 3 }}>เหตุผล: {d.note}</div>}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-
-                <div className="st-steps">
+                <ol className="sx-rail" aria-label="ความคืบหน้าคำขอ">
                     {STEPS.map((step) => {
                         const state = stepState(step.n, progress);
-                        const status = selectedApp?.application_status;
-                        const showBook = step.n === 5 && status === "DOCUMENT_APPROVED";
-                        const showView = step.n === 5 && status === "QUEUE_BOOKED";
-                        const showFix = step.n === 3 && state === "revision";
-                        const showUpload = step.n === 3 && state === "active";
                         return (
-                            <StepBox key={step.n} step={step} state={state}>
-                                {(showFix || showUpload) && (
-                                    <button type="button" className="st-cta" onClick={goToUpload}
-                                        style={{
-                                            marginTop: "auto", border: "none",
-                                            background: showFix ? "linear-gradient(180deg, #E8A317, #D98E04)" : `linear-gradient(180deg, #2A3B8C, ${C.navy})`,
-                                            color: "#fff", fontFamily: HEAD, fontWeight: 700, fontSize: ".82rem",
-                                            padding: "8px 18px", borderRadius: 999, cursor: "pointer",
-                                        }}>
-                                        {showFix ? "แก้ไขเอกสาร" : "อัปโหลดเอกสาร"}
-                                    </button>
-                                )}
-                                {(showBook || showView) && (
-                                    <button type="button" className="st-cta" onClick={goToBooking}
-                                        style={{
-                                            marginTop: "auto", border: showBook ? "none" : `1.5px solid ${C.navy}`,
-                                            background: showBook ? `linear-gradient(180deg, #F0409A, ${C.pink})` : "#fff",
-                                            color: showBook ? "#fff" : C.navy, fontFamily: HEAD, fontWeight: 700, fontSize: ".82rem",
-                                            padding: "8px 18px", borderRadius: 999, cursor: "pointer",
-                                            boxShadow: showBook ? "0 10px 22px -10px rgba(227,28,121,.65)" : "none",
-                                        }}>
-                                        {showBook ? "จองคิว" : "ดูนัดหมาย"}
-                                    </button>
-                                )}
-                            </StepBox>
+                            <li key={step.n} className={`sx-node is-${state}`} aria-current={state === "active" ? "step" : undefined}>
+                                <span className="sx-dot">
+                                    {state === "done" ? <IconCheck /> : state === "failed" ? <IconCross /> : step.n}
+                                </span>
+                                <span className="sx-lbl">{step.label}</span>
+                            </li>
                         );
                     })}
-                </div>
+                </ol>
             </section>
 
-            {/* ---------- ประวัติคำขอ ---------- */}
-            <section style={{ ...cardStyle, padding: "clamp(18px, 3vw, 26px)" }}>
-                <h2 style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "1.2rem", margin: "0 0 14px" }}>ประวัติคำขอ</h2>
-
-                <div role="tablist" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-                    {[
-                        { key: "current", label: "คำขอปัจจุบัน", count: currentList.length },
-                        { key: "done", label: "คำขอที่สำเร็จแล้ว", count: doneList.length },
-                    ].map((t) => {
-                        const active = tab === t.key;
-                        return (
-                            <button key={t.key} type="button" role="tab" aria-selected={active} onClick={() => setTab(t.key)}
-                                style={{
-                                    border: `1.5px solid ${active ? C.navy : C.line}`,
-                                    background: active ? `linear-gradient(180deg, #2A3B8C, ${C.navy})` : "#fff",
-                                    color: active ? "#fff" : C.ink, fontFamily: HEAD, fontWeight: 600, fontSize: ".88rem",
-                                    padding: "9px 18px", borderRadius: 12, cursor: "pointer",
-                                    boxShadow: active ? SHADOW_ACTIVE : "none",
-                                }}>
-                                {t.label} ({t.count})
-                            </button>
-                        );
-                    })}
-                </div>
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16, padding: "12px 14px", background: C.soft, borderRadius: 12 }}>
-                    <label style={{ display: "grid", gap: 4, fontSize: ".76rem", color: C.faint }}>
-                        ปีการศึกษา
-                        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} style={selectStyle}>
-                            <option value="ALL">ทั้งหมด</option>
-                            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                    </label>
-                    <label style={{ display: "grid", gap: 4, fontSize: ".76rem", color: C.faint }}>
-                        ประเภทผู้กู้
-                        <select value={loanFilter} onChange={(e) => setLoanFilter(e.target.value)} style={selectStyle}>
-                            <option value="ALL">ทั้งหมด</option>
-                            {loanTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </label>
-                </div>
-
-                {shownList.length === 0 ? (
-                    <EmptyBox>
-                        {tab === "current" ? "ไม่มีคำขอที่กำลังดำเนินการ" : "ยังไม่มีคำขอที่สำเร็จแล้ว"}
-                    </EmptyBox>
-                ) : (
-                    <div style={{ display: "grid", gap: 10 }}>
-                        {shownList.map((app) => (
-                            <ApplicationCard
-                                key={app.application_id}
-                                app={app}
-                                detail={details[app.application_id]}
-                                defaultOpen={String(app.application_id) === String(applicationId)}
-                                onOpen={loadDetail}
-                            />
+            {/* ---------- เอกสารที่ต้องแก้ไข ---------- */}
+            {revisionDocs.length > 0 && (
+                <section role="alert" className="sx-panel" style={{ borderColor: "#F2D49A", background: C.amberBg }}>
+                    <h2 className="sx-h2" style={{ color: C.amber }}>เอกสารที่ต้องแก้ไข {revisionDocs.length} รายการ</h2>
+                    <ul style={{ margin: "10px 0 0", padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+                        {revisionDocs.map((d) => (
+                            <li key={d.requirementId} style={{ background: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: ".88rem" }}>
+                                <div style={{ fontWeight: 700 }}>{d.documentType}</div>
+                                {d.note && <div style={{ color: C.red, marginTop: 3 }}>เหตุผล: {d.note}</div>}
+                            </li>
                         ))}
-                    </div>
+                    </ul>
+                </section>
+            )}
+
+            {/* ---------- รายละเอียดคำขอปัจจุบัน ---------- */}
+            <section className="sx-panel">
+                <h2 className="sx-h2" style={{ marginBottom: 14 }}>รายละเอียดคำขอปัจจุบัน</h2>
+                {selectedApp ? (
+                    <HistoryItem app={selectedApp} detail={selectedDetail} onOpen={loadDetail} defaultOpen />
+                ) : (
+                    <DetailBody detail={selectedDetail} />
+                )}
+            </section>
+
+            {/* ---------- คำขอย้อนหลัง ---------- */}
+            <section className="sx-panel">
+                <h2 className="sx-h2">คำขอกู้ยืมที่สำเร็จแล้ว</h2>
+
+                {others.length === 0 ? (
+                    <div className="sx-empty" style={{ marginTop: 14 }}>ยังไม่มีคำขอในภาคการศึกษาอื่น</div>
+                ) : (
+                    <>
+                        <div role="tablist" className="sx-tabs">
+                            {[
+                                { key: "current", label: "กำลังดำเนินการ", count: currentList.length },
+                                { key: "done", label: "สำเร็จแล้ว", count: doneList.length },
+                            ].map((t) => (
+                                <button key={t.key} type="button" role="tab" className="sx-tab"
+                                    aria-selected={tab === t.key} onClick={() => setTab(t.key)}>
+                                    {t.label} ({t.count})
+                                </button>
+                            ))}
+                        </div>
+
+                        {(years.length > 1 || loanTypes.length > 1) && (
+                            <div className="sx-filters">
+                                <label>
+                                    ปีการศึกษา
+                                    <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+                                        <option value="ALL">ทั้งหมด</option>
+                                        {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </label>
+                                <label>
+                                    ประเภทผู้กู้
+                                    <select value={loanFilter} onChange={(e) => setLoanFilter(e.target.value)}>
+                                        <option value="ALL">ทั้งหมด</option>
+                                        {loanTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </label>
+                            </div>
+                        )}
+
+                        {shownList.length === 0 ? (
+                            <div className="sx-empty">
+                                {tab === "current" ? "ไม่มีคำขออื่นที่กำลังดำเนินการ" : "ยังไม่มีคำขอที่สำเร็จแล้ว"}
+                            </div>
+                        ) : (
+                            <div>
+                                {shownList.map((app) => (
+                                    <HistoryItem key={app.application_id} app={app}
+                                        detail={details[app.application_id]} onOpen={loadDetail} />
+                                ))}
+                            </div>
+                        )}
+                    </>
                 )}
             </section>
         </>,

@@ -7,7 +7,6 @@ function AppNavbar({ setPage }) {
         { id: "student-home", page: "home", label: "หน้าหลัก" },
         { id: "student-profile", page: "studentProfiles", label: "ข้อมูลของฉัน" },
         { id: "student-loan-application", page: "eligibility", label: "คำขอกู้ยืมเงิน กยศ." },
-        { id: "student-booking", page: "booking", label: "จองคิว" },
         { id: "student-status", page: "status", label: "ติดตามสถานะ" },
     ];
 

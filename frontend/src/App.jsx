@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AppProvider,
   useApp,
@@ -24,9 +24,8 @@ import Login from "./login/Login";
 function AppContent() {
   const [page, setPage] = useState("home");
 
-  //const [loanData, setLoanData] = useState(null);
-
-  //console.log("loanData:", loanData);
+  // คำขอเปลี่ยนหน้าที่รอตรวจสิทธิ์ (ดูคำอธิบายที่ goProtectedPage)
+  const [navRequest, setNavRequest] = useState(null);
 
   // เก็บนักศึกษาที่เจ้าหน้าที่เลือกตรวจสอบ
   const [reviewStudent, setReviewStudent] =
@@ -44,11 +43,27 @@ function AppContent() {
   |--------------------------------------------------------------------------
   | ตรวจสอบสิทธิ์ก่อนเข้าหน้านักศึกษา
   |--------------------------------------------------------------------------
+  | เดิมเช็คสิทธิ์ทันทีตอนเรียก ทำให้ได้ค่าเก่าค้างอยู่ เช่น หน้าข้อมูลส่วนตัว
+  | กด "บันทึก" แล้วสั่งไปหน้าคำขอกู้ทันที แต่ isProfileComplete ยังเป็นค่าเดิม
+  | (false) จึงเด้งแจ้ง "กรุณากรอกข้อมูลส่วนบุคคลให้ครบก่อน" ต้องกดรอบสอง
+  |
+  | ตอนนี้แค่ "จดคำขอไว้" ก่อน แล้วค่อยเช็คใน useEffect ด้านล่าง ซึ่งรันหลัง
+  | React อัปเดตข้อมูลที่เพิ่งบันทึกเสร็จแล้ว จึงได้ค่าล่าสุดเสมอ
   */
 
   const goProtectedPage = (targetPage) => {
+    // ใส่ id กันกรณีขอหน้าเดิมซ้ำแล้ว React มองว่าค่าไม่เปลี่ยน
+    setNavRequest({ targetPage, id: Date.now() + Math.random() });
+  };
+
+  useEffect(() => {
+    if (!navRequest) return;
+
+    const { targetPage } = navRequest;
+    setNavRequest(null);
+
     // ด่านแรกสุด — ทุกหน้ายกเว้น "หน้าหลัก" กับ "เข้าสู่ระบบ" เอง
-    // ต้อง login ก่อนถึงจะเข้าได้ (ตามที่ต้องการตั้งแต่แรก)
+    // ต้อง login ก่อนถึงจะเข้าได้
     const publicPages = ["home", "login"];
 
     if (!publicPages.includes(targetPage) && !isAuthenticated) {
@@ -57,21 +72,14 @@ function AppContent() {
       return;
     }
 
-    // ลำดับที่ต้องการ: login/register เสร็จ -> กรอกข้อมูลส่วนตัวให้ครบ
-    // ก่อนเสมอ ถึงจะไปหน้า "คำขอกู้ยืมเงิน กยศ." (สร้างคำร้อง/คัดกรอง) ได้
-    // เช็คจาก myProfile ตรงๆ (ไม่ผูกกับคำร้อง จึงใช้ได้ตั้งแต่สมัครเสร็จ)
-    if (
-      targetPage === "eligibility" &&
-      !isProfileComplete
-    ) {
+    // ต้องกรอกข้อมูลส่วนตัวให้ครบก่อน ถึงจะไปหน้า "คำขอกู้ยืมเงิน กยศ." ได้
+    if (targetPage === "eligibility" && !isProfileComplete) {
       alert("กรุณากรอกข้อมูลส่วนบุคคลให้ครบก่อน");
       setPage("studentInfo");
       return;
     }
 
-    // หน้าที่ต้องมีคำร้องกู้ยืมอยู่แล้วถึงจะเข้าได้ (อัปโหลด/สถานะ/จองคิว)
-    // ถ้ายังไม่มีคำร้องเลย ให้ไปหน้าคำขอกู้ยืมก่อน (ซึ่งจะเช็คโปรไฟล์ต่อเอง
-    // ถ้ายังกรอกไม่ครบ)
+    // หน้าที่ต้องมีคำร้องกู้ยืมอยู่แล้วถึงจะเข้าได้ (อัปโหลด/จองคิว)
     if (
       ["uploadDocuments", "booking"].includes(targetPage) &&
       !hasOwnApplication
@@ -86,17 +94,12 @@ function AppContent() {
       selectedStudent?.eligibilityStatus !== "PASSED" &&
       selectedStudent?.eligibilityStatus !== "NOT_REQUIRED"
     ) {
-      alert(
-        "กรุณาผ่านการคัดกรองก่อน"
-      );
-
+      alert("กรุณาผ่านการคัดกรองก่อน");
       setPage("eligibility");
       return;
     }
 
-    // "จองคิว" ต้องรอ "เจ้าหน้าที่ตรวจเอกสารผ่านแล้ว" เท่านั้น — แค่
-    // อัปโหลดครบ (documentsCompleted) ไม่พอ เพราะเอกสารอาจยัง
-    // "รอตรวจสอบ" อยู่ก็ได้ ต้องเช็คสถานะคำร้องจริงจาก backend
+    // "จองคิว" ต้องรอ "เจ้าหน้าที่ตรวจเอกสารผ่านแล้ว" เท่านั้น
     const approvedStatuses = [
       "DOCUMENT_APPROVED",
       "QUEUE_BOOKED",
@@ -113,13 +116,18 @@ function AppContent() {
       alert(
         "ต้องรอผลการตรวจสอบเอกสารว่า \"ผ่าน\" ก่อน ถึงจะจองคิวได้"
       );
-
       setPage("status");
       return;
     }
 
     setPage(targetPage);
-  };
+  }, [
+    navRequest,
+    isAuthenticated,
+    isProfileComplete,
+    hasOwnApplication,
+    selectedStudent,
+  ]);
 
   /*
   |--------------------------------------------------------------------------
@@ -143,19 +151,9 @@ function AppContent() {
   |--------------------------------------------------------------------------
   */
 
-  const handleSaveReview = (
-    updatedStudent
-  ) => {
-    // เก็บข้อมูลล่าสุดไว้ใน state ของหน้าตรวจสอบ
+  const handleSaveReview = (updatedStudent) => {
     setReviewStudent(updatedStudent);
-
-    /*
-     * ตอนเชื่อม Backend หรือมีฟังก์ชัน updateStudent
-     * ใน AppContext สามารถเรียกบันทึกข้อมูลตรงนี้ได้
-     */
-
     alert("บันทึกผลการตรวจสอบเรียบร้อย");
-
     setPage("studentList");
   };
 
@@ -167,75 +165,37 @@ function AppContent() {
 
   const renderPage = () => {
     switch (page) {
-      /*
-      |--------------------------------------------------------------------------
-      | หน้านักศึกษา
-      |--------------------------------------------------------------------------
-      */
+      /* ---------- หน้านักศึกษา ---------- */
 
       case "home":
-        return (
-          <Home
-            setPage={goProtectedPage}
-          />
-        );
+        return <Home setPage={goProtectedPage} />;
 
       case "studentProfiles":
-        return (
-          <StudentProfiles
-            setPage={goProtectedPage}
-          />
-        );
+        return <StudentProfiles setPage={goProtectedPage} />;
 
       case "studentInfo":
-        return (
-          <StudentInfo
-            setPage={goProtectedPage}
-          />
-        );
+        return <StudentInfo setPage={goProtectedPage} />;
 
       case "eligibility":
-        return (
-          <Eligibility
-            setPage={goProtectedPage}
-          />
-        );
+        return <Eligibility setPage={goProtectedPage} />;
 
       case "uploadDocuments":
-        return (
-          <UploadDocuments
-            setPage={goProtectedPage}
-          />
-        );
+        return <UploadDocuments setPage={goProtectedPage} />;
 
       case "booking":
-        return (
-          <Booking
-            setPage={goProtectedPage}
-          />
-        );
+        return <Booking setPage={goProtectedPage} />;
 
       case "status":
-        return (
-          <Status
-            setPage={goProtectedPage}
-          />
-        );
+        return <Status setPage={goProtectedPage} />;
 
-      /*
-      |--------------------------------------------------------------------------
-      | หน้าเจ้าหน้าที่
-      |--------------------------------------------------------------------------
-      */
+      /* ---------- หน้าเจ้าหน้าที่ ---------- */
 
       case "studentList":
         return (
           <StudentList
             students={students}
             setPage={setPage}
-            openStudentReview={
-              openStudentReview
-            }
+            openStudentReview={openStudentReview}
           />
         );
 
@@ -244,9 +204,7 @@ function AppContent() {
           return (
             <main className="min-h-screen bg-[#eef5ff] px-5 py-10 sm:px-8 lg:px-10">
               <section className="mx-auto max-w-2xl rounded-3xl bg-white p-8 text-center shadow-sm">
-                <div className="text-6xl">
-                  📭
-                </div>
+                <div className="text-6xl">📭</div>
 
                 <h1 className="mt-5 text-2xl font-black text-[#07116f]">
                   ยังไม่ได้เลือกนักศึกษา
@@ -258,11 +216,7 @@ function AppContent() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setPage(
-                      "studentList"
-                    )
-                  }
+                  onClick={() => setPage("studentList")}
                   className="mt-6 rounded-xl bg-[#07116f] px-6 py-3 font-black text-white transition hover:bg-blue-900"
                 >
                   ไปหน้ารายชื่อนักศึกษา
@@ -281,60 +235,18 @@ function AppContent() {
         );
 
       case "staffBooking":
-        return (
-          <StaffBooking
-            setPage={setPage}
-          />
-        );
+        return <StaffBooking setPage={setPage} />;
 
       case "staffReport":
-        return (
-          <StaffReport
-            setPage={setPage}
-          />
-        );
+        return <StaffReport setPage={setPage} />;
 
       case "staffSettings":
         return <StaffSettings />;
 
       default:
-        return (
-          <Home
-            setPage={goProtectedPage}
-          />
-        );
+        return <Home setPage={goProtectedPage} />;
     }
   };
-
-  /*if (page === "staffDashboard") {
-    return (
-      <StaffDashboard
-        students={students}
-        setPage={setPage}
-        openStudentReview={openStudentReview}
-      />
-    );
-  }
-
-  if (page === "studentList") {
-    return (
-      <StudentList
-        students={students}
-        setPage={setPage}
-        openStudentReview={openStudentReview}
-      />
-    );
-  }
-
-  if (page === "documentReview") {
-    return (
-      <DocumentReview
-        student={selectedStudent || students[0]}
-        setPage={setPage}
-        onSave={saveStudentReview}
-      />
-    );
-  }*/
 
   return (
     <>
