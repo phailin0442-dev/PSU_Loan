@@ -80,13 +80,27 @@ export async function fetchApplicationPeriods() {
     return handleResponse(response);
 }
 
+// เพิ่มเทอมใหม่เท่านั้น — ถ้าปี+เทอมนี้มีอยู่แล้ว backend จะตอบ error (ไม่เขียนทับ)
 export async function saveApplicationPeriod(payload) {
     const response = await fetch(
         `${API_BASE_URL}/api/staff/application-periods`,
         {
-            method: "PUT",
+            method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
+        }
+    );
+    return handleResponse(response);
+}
+
+// แก้ไขวันที่ของเทอมที่มีอยู่แล้ว (ปี+เทอมเปลี่ยนไม่ได้)
+export async function updateApplicationPeriod(periodId, { startDate, endDate, isOpen }) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/staff/application-periods/${periodId}`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ startDate, endDate, isOpen }),
         }
     );
     return handleResponse(response);
@@ -100,8 +114,35 @@ export async function toggleApplicationPeriod(periodId) {
     return handleResponse(response);
 }
 
+// กำหนด/ล้างวันเปิด-ปิดจองคิวของเทอม (แยกบันทึกจากช่วงยื่นกู้)
+// ส่ง null ทั้งคู่ = ล้างวันจองคิว
+export async function saveQueueDates(periodId, { queueStartDate, queueEndDate }) {
+    const response = await fetch(
+        `${API_BASE_URL}/api/staff/application-periods/${periodId}/queue-dates`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ queueStartDate, queueEndDate }),
+        }
+    );
+    return handleResponse(response);
+}
+
 export async function fetchStaffDashboard() {
     const response = await fetch(`${API_BASE_URL}/api/staff/dashboard`);
+    return handleResponse(response);
+}
+
+// รายงานผลการตรวจสอบเอกสาร
+// ไม่ส่งอะไร = ภาคเรียนล่าสุด, { scope: "all" } = ทุกภาคเรียน
+export async function fetchStaffReport({ academicYear, semester, scope } = {}) {
+    const params = new URLSearchParams();
+    if (scope) params.set("scope", scope);
+    if (academicYear) params.set("academicYear", academicYear);
+    if (semester) params.set("semester", semester);
+    const qs = params.toString();
+
+    const response = await fetch(`${API_BASE_URL}/api/staff/report${qs ? `?${qs}` : ""}`);
     return handleResponse(response);
 }
 
@@ -234,8 +275,6 @@ export async function fetchDocumentHistory(applicationId, requirementId) {
 | - คืนค่าเฉพาะส่วน data ของคำตอบ
 */
 
-
-
 // token ที่ AppContext เก็บไว้ตอน login (ดู persistAuth ใน AppContext.jsx)
 function getToken() {
     try {
@@ -274,4 +313,53 @@ export async function requestWithAuth(path, { method = "GET", body } = {}) {
     }
 
     return json.data;
+}
+
+/*
+|--------------------------------------------------------------------------
+| หน้าจัดการคิว (เจ้าหน้าที่) — ต้อง login เป็นเจ้าหน้าที่
+|--------------------------------------------------------------------------
+*/
+
+// วันและรอบในช่วงจองของเทอม (ไม่ส่ง periodId = ระบบเลือกเทอมที่กำลังเปิดจองให้)
+export function fetchQueueBoard(periodId) {
+    return requestWithAuth(`/api/staff/queue-board${periodId ? `?periodId=${periodId}` : ""}`);
+}
+
+// รายชื่อนักศึกษาในรอบเวลานั้น
+export function fetchSlotBookings(slotId) {
+    return requestWithAuth(`/api/staff/queue-board/slots/${slotId}`);
+}
+
+// บันทึกว่านักศึกษามา (true) หรือไม่มา (false)
+export function markAttendance(bookingId, attended) {
+    return requestWithAuth(`/api/staff/queue-bookings/${bookingId}/attendance`, {
+        method: "PATCH",
+        body: { attended },
+    });
+}
+
+// บันทึกผลตรวจเอกสารฉบับจริง: ครบถ้วน / ไม่ครบถ้วน (ไม่ครบต้องมีเหตุผล)
+export function recordDocumentResult(bookingId, { complete, remark }) {
+    return requestWithAuth(`/api/staff/queue-bookings/${bookingId}/documents`, {
+        method: "PATCH",
+        body: { complete, remark },
+    });
+}
+
+/*
+|--------------------------------------------------------------------------
+| ข้อความ popup "ยื่นเอกสารไม่สำเร็จ" (แก้ได้ในหน้าตั้งค่า)
+|--------------------------------------------------------------------------
+*/
+export const QUEUE_FAIL_DEFAULTS = {
+    title: "ยื่นเอกสารไม่สำเร็จ",
+    noShow: "คุณไม่ได้มายื่นเอกสารฉบับจริงตามวันเวลาที่นัดไว้",
+    incomplete: "เจ้าหน้าที่ตรวจเอกสารฉบับจริงในวันนัดแล้ว พบว่าเอกสารยังไม่ครบถ้วน",
+    contact: "กรุณาติดต่อเจ้าหน้าที่กองทุนฯ ณ กองพัฒนานักศึกษา อาคาร 2 ในวันและเวลาราชการ เพื่อดำเนินการต่อ",
+};
+
+export async function fetchQueueFailMessage() {
+    const response = await fetch(`${API_BASE_URL}/api/student/messages/queue-fail`);
+    return handleResponse(response);
 }

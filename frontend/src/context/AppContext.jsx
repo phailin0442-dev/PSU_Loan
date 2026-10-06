@@ -27,25 +27,43 @@ const AppContext = createContext(null);
 
 /*
 |--------------------------------------------------------------------------
-| แปลงแถวจาก v_application_overview (GET /api/student) ให้เป็นรูปแบบ
-| student object ที่หน้าเว็บเดิมใช้อยู่ (ตั้งใจให้ field ตรงกับ mockData.js
-| เดิมมากที่สุด เพื่อลดจุดที่ต้องแก้ในหน้าอื่นๆ)
+| แก้บัค "รีเฟรชแล้วเจ้าหน้าที่กลายเป็นนักศึกษา"
 |--------------------------------------------------------------------------
-| หมายเหตุ: field บางตัวใน mockData.js เดิม (nationality, religion,
-| maritalStatus, studentInfoCompleted, eligibilityCompleted,
-| currentStep ฯลฯ) ไม่มีอยู่ใน schema จริง เพราะ backend ยังไม่มีระบบ
-| ติดตาม flow เหล่านี้ — ใส่ค่า default ไปก่อนเพื่อไม่ให้หน้าอื่นพัง
-| ยังไม่ใช่ของจริงจนกว่าจะทำ endpoint ที่เกี่ยวข้องเพิ่ม
+| เดิม role เริ่มต้นเป็น "student" เสมอ แต่ token + user ถูกเก็บใน localStorage
+| พอรีเฟรช user ยังเป็นเจ้าหน้าที่ แต่ role กลับเป็น student
+|   → เมนูเป็นของนักศึกษา
+|   → ไปขอ /api/student/profile/<id เจ้าหน้าที่> แล้วได้ 404
+|   → หน้านักศึกษาให้กรอกข้อมูลใหม่หมด
+| ตอนนี้ role คำนวณจาก user ที่ login ค้างไว้ และกันไม่ให้บัญชีเจ้าหน้าที่
+| ไปโหลดข้อมูลฝั่งนักศึกษา
+|--------------------------------------------------------------------------
+*/
+
+const STORAGE_TOKEN = "psu_loan_token";
+const STORAGE_USER = "psu_loan_user";
+
+function readSavedUser() {
+    try {
+        const saved = localStorage.getItem(STORAGE_USER);
+        return saved ? JSON.parse(saved) : null;
+    } catch {
+        return null;
+    }
+}
+
+const roleOfUser = (user) => (user?.role === "STAFF" ? "staff" : "student");
+
+/*
+|--------------------------------------------------------------------------
+| แปลงแถวจาก v_application_overview (GET /api/student) ให้เป็นรูปแบบ
+| student object ที่หน้าเว็บเดิมใช้อยู่
 |--------------------------------------------------------------------------
 */
 function mapOverviewRowToStudent(row) {
     const borrowerTypeCode = normalizeBorrowerTypeCode(row.loan_type_code);
 
     return {
-        // pg ส่งคอลัมน์ BIGINT (application_id, student_user_id) กลับมาเป็น
-        // string เสมอ ("2" ไม่ใช่ 2) ต้องแปลงเป็น Number ตรงนี้ ไม่งั้นจะเทียบ
-        // กับ selectedStudentId (ที่ AppNavbar แปลงเป็น Number ไว้แล้ว) ไม่ตรงกัน
-        // แล้ว selectedStudent จะ fallback ไปที่ students[0] ตลอดไม่ว่าจะเลือกใคร
+        // pg ส่ง BIGINT กลับมาเป็น string ต้องแปลงเป็น Number
         id: Number(row.application_id),
         demoLabel: `${row.loan_type_name}${row.semester === 2 ? " ภาคเรียน 2" : ""
             }`,
@@ -85,27 +103,17 @@ function mapOverviewRowToStudent(row) {
         ),
         applicationStatusCode: row.application_status,
 
-        // ยังไม่มี endpoint ติดตาม flow "กรอกข้อมูลส่วนตัว" จริง แต่ในทางปฏิบัติ
-        // แถวใน student_profiles จะมีครบทุกฟิลด์เสมอ (NOT NULL ทุกคอลัมน์หลัก)
-        // เพราะงั้นถ้าดึงคำร้องมาได้ แปลว่าโปรไฟล์กรอกครบแล้วจริง
         studentInfoCompleted: true,
 
-        // ผ่านคัดกรองแล้วก็ต่อเมื่อ backend ประเมินผลแล้ว (ไม่ใช่ PENDING) —
-        // ใช้แค่บอกว่า "ตรวจแล้วหรือยัง" ไม่ได้แปลว่า "ผ่าน" เสมอไป
-        // (ถ้า FAILED ก็ถือว่า "ตรวจแล้ว" เหมือนกัน)
+        // ตรวจแล้วหรือยัง (FAILED ก็ถือว่าตรวจแล้ว)
         eligibilityCompleted: row.eligibility_status !== "PENDING",
 
-        // ตัวนี้ต่างหากที่บอกว่า "ผ่านจริง" — ใช้เช็คก่อนปล่อยเข้าหน้า
-        // อัปโหลดเอกสาร/โชว์ banner "ผ่านแล้ว" ห้ามใช้ eligibilityCompleted
-        // แทนเด็ดขาด เพราะ FAILED ก็จะ true ไปด้วย (บั๊กที่เคยเจอมาแล้ว)
+        // ผ่านจริง — ใช้ตัวนี้เช็กก่อนปล่อยเข้าหน้าอัปโหลด
         eligibilityPassed: row.eligibility_status === "PASSED",
 
-        // ต้องรอโหลดรายละเอียด (requiredDocuments) ก่อนถึงจะรู้ว่าอัปโหลดครบ
-        // ไหม ใส่ false ไปก่อน แล้วไปคำนวณจริงใน mergeDetailIntoStudent
         documentsCompleted: false,
         currentStep: 3,
 
-        // เอกสารต้องดึงเพิ่มผ่าน GET /api/student/:id (ดู loadStudentDetail)
         requiredDocuments: [],
         qualificationDocuments: [],
         documents: [],
@@ -117,16 +125,12 @@ function mapOverviewRowToStudent(row) {
 
 /*
 |--------------------------------------------------------------------------
-| แปลงผลลัพธ์จาก GET /api/student/:id (รายละเอียด + requiredDocuments)
-| มารวมเข้ากับ student object เดิม
+| รวมผลจาก GET /api/student/:id เข้ากับ student object เดิม
 |--------------------------------------------------------------------------
 */
 function mergeDetailIntoStudent(student, detail) {
     const requiredDocuments = detail.requiredDocuments || [];
 
-    // อัปโหลดครบแล้วก็ต่อเมื่อทุก requirement (ยกเว้นกลุ่มคัดกรอง
-    // GPAX/จิตอาสา ที่อัปโหลดไปแล้วตั้งแต่หน้า Eligibility) มี documentId
-    // จริง — ต้องกรองกลุ่มเดียวกับที่ UploadDocuments.jsx ไม่บังคับอัปโหลดซ้ำ
     const PRESCREEN_CATEGORIES = ["GPAX_EVIDENCE", "VOLUNTEER_EVIDENCE"];
 
     const uploadStageRequirements = requiredDocuments.filter(
@@ -137,36 +141,21 @@ function mergeDetailIntoStudent(student, detail) {
         uploadStageRequirements.length === 0 ||
         uploadStageRequirements.every((item) => Boolean(item.documentId));
 
-    // เอกสารกลุ่มคัดกรอง (ภาคเรียน 1) แยกจากเอกสารกลุ่มอื่น เหมือนโครงสร้างเดิม
     const qualificationDocuments = requiredDocuments
-        .filter((item) =>
-            ["GPAX_EVIDENCE", "VOLUNTEER_EVIDENCE"].includes(
-                item.documentCode
-            )
-        )
+        .filter((item) => PRESCREEN_CATEGORIES.includes(item.documentCode))
         .filter((item) => item.documentId)
         .map((item) => mapRequiredDocToFrontendDoc(item));
 
     const documents = requiredDocuments
-        .filter(
-            (item) =>
-                !["GPAX_EVIDENCE", "VOLUNTEER_EVIDENCE"].includes(
-                    item.documentCode
-                )
-        )
+        .filter((item) => !PRESCREEN_CATEGORIES.includes(item.documentCode))
         .filter((item) => item.documentId)
         .map((item) => mapRequiredDocToFrontendDoc(item));
 
-    // จำนวนครั้งที่ถูกตีกลับสะสม "รวมทุกเอกสาร ทุกรอบ" (ไม่ใช่แค่นับว่า
-    // ตอนนี้ค้างอยู่กี่ใบ) ให้ตรงกับความหมายเดียวกับที่หน้าเจ้าหน้าที่ใช้
-    // (rejectionCount ต่อเอกสาร) — Home.jsx จะอ่านจาก field นี้โดยตรง
     const revisionCount = requiredDocuments.reduce(
         (sum, item) => sum + (Number(item.rejectionCount) || 0),
         0
     );
 
-    // ประวัติการเปลี่ยนสถานะคำร้อง — แปลรหัสสถานะเป็นข้อความไทยไว้ล่วงหน้า
-    // ให้หน้า Status.jsx ใช้แสดงตารางได้เลยไม่ต้องแปลเอง
     const statusHistory = (detail.statusHistory || []).map((item) => ({
         oldStatus: item.oldStatus,
         newStatus: item.newStatus,
@@ -178,9 +167,6 @@ function mergeDetailIntoStudent(student, detail) {
         changedAt: item.changedAt,
     }));
 
-    // ประวัติการตรวจ/ตีกลับรายไฟล์แบบละเอียด (ไฟล์ไหน รอบที่เท่าไหร่
-    // ใครตรวจ เหตุผลอะไร) — ใช้แทนที่ statusHistory แบบทั่วไปในตาราง
-    // "ประวัติการยื่นคำขอ" ที่หน้า Status.jsx
     const documentReviewHistory = (detail.documentReviewHistory || []).map(
         (item) => ({
             round: item.round,
@@ -196,8 +182,40 @@ function mergeDetailIntoStudent(student, detail) {
         })
     );
 
+    // ผลวันนัดยื่นเอกสารฉบับจริง (เจ้าหน้าที่บันทึกที่หน้าจัดการคิว)
+    //   ไม่มาตามนัด (NO_SHOW)      → ไม่สำเร็จ
+    //   มาแล้วแต่เอกสารไม่ครบ (FAILED) → ไม่สำเร็จ
+    // ใช้ร่วมกันทั้งป้ายสถานะ, popup และหน้าจองคิว
+    const signing = detail.signing || null;
+    const latestBooking = detail.latestBooking || null;
+    const latestStatus = latestBooking?.status || null;
+
+    const noShow = latestStatus === "NO_SHOW";
+    // ถ้าจองรอบใหม่หลังจากไม่ผ่าน ผลเก่าไม่นับแล้ว
+    const docsFailed =
+        !noShow && signing?.status === "FAILED" && (latestStatus === "COMPLETED" || !latestStatus);
+
+    const queueFailed = noShow || docsFailed;
+    const queueFailType = noShow ? "NO_SHOW" : docsFailed ? "DOCS_INCOMPLETE" : null;
+    const queueFailReason = noShow
+        ? "ไม่ได้มายื่นเอกสารตามวันเวลาที่นัดไว้"
+        : docsFailed
+            ? `เอกสารฉบับจริงไม่ครบถ้วน${signing?.remark ? `: ${signing.remark}` : ""}`
+            : "";
+
     return {
         ...student,
+        applicationStatus: queueFailed ? "ไม่สำเร็จ" : student.applicationStatus,
+        queueFailed,
+        queueFailType,
+        queueFailReason,
+        latestBooking,
+        signingStatus: signing?.status || null,
+        signingRemark: signing?.remark || "",
+        signingVerifiedAt: signing?.verifiedAt || null,
+        signingLocation: signing?.location || "",
+        // ชื่อเดิม เผื่อหน้าอื่นใช้อยู่
+        documentSubmissionFailed: queueFailed,
         parent: detail.parent || null,
         requiredDocuments,
         qualificationDocuments,
@@ -213,7 +231,6 @@ function mergeDetailIntoStudent(student, detail) {
 }
 
 function mapRequiredDocToFrontendDoc(item) {
-    // import ตรงนี้เพื่อเลี่ยง circular import ตอน build (จะย้ายไป top ถ้าจำเป็น)
     const category =
         item.documentCode === "DISBURSEMENT_FORM"
             ? "WITHDRAWAL_FORM"
@@ -239,75 +256,69 @@ function mapRequiredDocToFrontendDoc(item) {
 export function AppProvider({ children }) {
     const [students, setStudents] = useState([]);
     const [selectedStudentId, setSelectedStudentId] = useState(null);
-    const [role, setRole] = useState("student");
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
-    // สถานะล็อกอินจริง — เก็บ token ไว้ใน localStorage กันหายตอนรีเฟรชหน้า
-    // (แยกต่างหากจาก dropdown "นักศึกษาตัวอย่าง" ที่ยังเก็บไว้คู่กันสำหรับ
-    // demo/ทดสอบ — ไม่ได้ตัดออก)
     const [token, setToken] = useState(
-        () => localStorage.getItem("psu_loan_token") || null
+        () => localStorage.getItem(STORAGE_TOKEN) || null
     );
-    const [currentUser, setCurrentUser] = useState(() => {
-        try {
-            const saved = localStorage.getItem("psu_loan_user");
-            return saved ? JSON.parse(saved) : null;
-        } catch {
-            return null;
-        }
-    });
+    const [currentUser, setCurrentUser] = useState(readSavedUser);
+
+    // ✅ role เริ่มจาก user ที่ login ค้างไว้ (เดิมเป็น "student" เสมอ)
+    const [role, setRole] = useState(() => roleOfUser(readSavedUser()));
 
     const isAuthenticated = Boolean(token && currentUser);
+    const isStaffUser = currentUser?.role === "STAFF";
 
-    // โปรไฟล์ดิบ (student_profiles ตรงๆ) — ไม่ผูกกับคำร้องเลย ใช้ได้
-    // ตั้งแต่สมัครสมาชิกเสร็จ แม้ยังไม่มีคำร้องกู้ยืมสักใบก็ตาม
+    // หน้าแรกของแต่ละบทบาท ใช้ตอนกดโลโก้ / หลังรีเฟรช
+    const homePage = role === "staff" ? "studentList" : "home";
+
     const [myProfile, setMyProfile] = useState(null);
     const [profileLoading, setProfileLoading] = useState(false);
 
     const currentUserId = currentUser?.userId;
 
-const refreshMyProfile = useCallback(async () => {
-    if (!currentUserId) {
-        setMyProfile(null);
-        return null;
-    }
-
-    setProfileLoading(true);
-
-    try {
-        const result = await fetchMyProfile(currentUserId);
-        setMyProfile(result.data);
-        return result.data;
-    } catch {
-        setMyProfile(null);
-        return null;
-    } finally {
-        setProfileLoading(false);
-    }
-}, [currentUserId]);
-
-useEffect(() => {
-    const timerId = window.setTimeout(() => {
-        if (isAuthenticated && role === "student") {
-            void refreshMyProfile();
-        } else {
+    const refreshMyProfile = useCallback(async () => {
+        // ✅ บัญชีเจ้าหน้าที่ไม่มีโปรไฟล์นักศึกษา ไม่ต้องโหลด
+        if (!currentUserId || isStaffUser) {
             setMyProfile(null);
+            return null;
         }
-    }, 0);
 
-    return () => {
-        window.clearTimeout(timerId);
-    };
-}, [isAuthenticated, role, refreshMyProfile]);
+        setProfileLoading(true);
+
+        try {
+            const result = await fetchMyProfile(currentUserId);
+            setMyProfile(result.data);
+            return result.data;
+        } catch {
+            setMyProfile(null);
+            return null;
+        } finally {
+            setProfileLoading(false);
+        }
+    }, [currentUserId, isStaffUser]);
+
+    useEffect(() => {
+        const timerId = window.setTimeout(() => {
+            if (isAuthenticated && role === "student" && !isStaffUser) {
+                void refreshMyProfile();
+            } else {
+                setMyProfile(null);
+            }
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timerId);
+        };
+    }, [isAuthenticated, role, isStaffUser, refreshMyProfile]);
 
     const saveMyProfile = async (payload) => {
         await updateMyProfile(currentUser.userId, payload);
         await refreshMyProfile();
     };
 
-    // ค่า placeholder ที่ backend ใส่ให้ตอนสมัครสมาชิก (ดู routes/auth.js
-    // POST /register) — ใช้เทียบเพื่อรู้ว่า "กรอกข้อมูลจริงแล้วหรือยัง"
+    // ค่า placeholder ที่ backend ใส่ให้ตอนสมัครสมาชิก
     const PLACEHOLDER_VALUES = ["-", "2000-01-01", "00000"];
 
     const isProfileComplete = Boolean(
@@ -329,87 +340,37 @@ useEffect(() => {
         setCurrentUser(nextUser);
 
         if (nextToken && nextUser) {
-            localStorage.setItem("psu_loan_token", nextToken);
-            localStorage.setItem("psu_loan_user", JSON.stringify(nextUser));
+            localStorage.setItem(STORAGE_TOKEN, nextToken);
+            localStorage.setItem(STORAGE_USER, JSON.stringify(nextUser));
         } else {
-            localStorage.removeItem("psu_loan_token");
-            localStorage.removeItem("psu_loan_user");
+            localStorage.removeItem(STORAGE_TOKEN);
+            localStorage.removeItem(STORAGE_USER);
         }
     };
 
     const logout = () => {
         persistAuth(null, null);
         setRole("student");
-    };
-
-    const login = async ({ identifier, password, role: loginRole }) => {
-        const result = await loginUser({ identifier, password, role: loginRole });
-        const { token: nextToken, user } = result.data;
-
-        persistAuth(nextToken, user);
-
-        if (user.role === "STAFF") {
-            setRole("staff");
-        } else {
-            setRole("student");
-            // รีโหลดลิสต์ใหม่ทั้งหมด แล้วให้ฟังก์ชันเลือกคำร้องของตัวเอง
-            // ให้อัตโนมัติ (ถ้ามี) —ใช้ user จาก response ตรงๆ แทน currentUser
-            // เพราะ state ยังไม่อัปเดตทันในรอบ render เดียวกัน
-            const mapped = await refreshStudentList();
-            const own = mapped.find(
-                (student) =>
-                    Number(student.studentUserId) === Number(user.userId)
-            );
-            if (own) setSelectedStudentId(own.id);
+        setMyProfile(null);
+        try {
+            sessionStorage.removeItem("psu_loan_page");
+        } catch {
+            // ไม่เป็นไร
         }
-
-        return user;
     };
-
-    const register = async (payload) => {
-        const result = await registerUser(payload);
-        const { token: nextToken, user } = result.data;
-
-        persistAuth(nextToken, user);
-        setRole("student");
-
-        // สมัครใหม่ยังไม่มีคำร้อง (application) เลย — refresh ลิสต์ไว้
-        // เผื่อมีอยู่แล้ว (เช่นกรณีสมัครซ้ำ) แต่ตามปกติจะไม่เจอ ต้องไปสร้าง
-        // คำร้องใหม่ผ่าน createNewApplication() ที่หน้าคัดกรองต่อ
-        await refreshStudentList();
-
-        return user;
-    };
-
-    // สร้างคำร้องกู้ยืมใหม่ (ใช้ตอนบัญชีที่ login อยู่ยังไม่มีคำร้องเลย)
-    // แล้ว refresh + เลือกคำร้องที่เพิ่งสร้างให้อัตโนมัติ
-    const createNewApplication = async (payload) => {
-        const result = await createApplication(payload);
-        await refreshStudentList({
-            selectApplicationId: result.data.applicationId,
-        });
-        return result.data;
-    };
-
-    // มีคำร้องเป็นของตัวเองอยู่แล้วไหม (ใช้เช็คว่าต้องพาไปสร้างคำร้องใหม่
-    // ก่อนไหม สำหรับบัญชีที่เพิ่ง register)
-    const hasOwnApplication =
-        role !== "student" ||
-        !isAuthenticated ||
-        students.some(
-            (student) =>
-                Number(student.studentUserId) === Number(currentUser?.userId)
-        );
 
     /*
     |----------------------------------------------------------------
-    | โหลดรายชื่อคำร้องทั้งหมดจาก backend ตอนเปิดแอปครั้งแรก
+    | โหลดรายชื่อคำร้องทั้งหมด
     |----------------------------------------------------------------
     */
     const refreshStudentList = useCallback(
-        async ({ selectApplicationId } = {}) => {
+        async ({ selectApplicationId, user } = {}) => {
             setLoading(true);
             setLoadError("");
+
+            // ใช้ user ที่ส่งมา (ตอน login) ก่อน เพราะ state อาจยังไม่อัปเดต
+            const activeUser = user ?? currentUser;
 
             try {
                 const result = await fetchStudentList();
@@ -424,11 +385,11 @@ useEffect(() => {
                         ? mapped.find(
                             (student) => student.id === selectApplicationId
                         )
-                        : currentUser
+                        : activeUser && activeUser.role !== "STAFF"
                             ? mapped.find(
                                 (student) =>
                                     Number(student.studentUserId) ===
-                                    Number(currentUser.userId)
+                                    Number(activeUser.userId)
                             )
                             : null;
 
@@ -448,7 +409,6 @@ useEffect(() => {
                 setLoading(false);
             }
         },
-        //* eslint-disable-next-line react-hooks/exhaustive-deps
         [currentUser]
     );
 
@@ -457,10 +417,57 @@ useEffect(() => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const login = async ({ identifier, password, role: loginRole }) => {
+        const result = await loginUser({ identifier, password, role: loginRole });
+        const { token: nextToken, user } = result.data;
+
+        persistAuth(nextToken, user);
+        setRole(roleOfUser(user));
+
+        if (user.role !== "STAFF") {
+            const mapped = await refreshStudentList({ user });
+            const own = mapped.find(
+                (student) =>
+                    Number(student.studentUserId) === Number(user.userId)
+            );
+            if (own) setSelectedStudentId(own.id);
+        }
+
+        return user;
+    };
+
+    const register = async (payload) => {
+        const result = await registerUser(payload);
+        const { token: nextToken, user } = result.data;
+
+        persistAuth(nextToken, user);
+        setRole("student");
+
+        await refreshStudentList({ user });
+
+        return user;
+    };
+
+    const createNewApplication = async (payload) => {
+        const result = await createApplication(payload);
+        await refreshStudentList({
+            selectApplicationId: result.data.applicationId,
+        });
+        return result.data;
+    };
+
+    const hasOwnApplication =
+        role !== "student" ||
+        !isAuthenticated ||
+        isStaffUser ||
+        students.some(
+            (student) =>
+                Number(student.studentUserId) === Number(currentUser?.userId)
+        );
+
     /*
     |----------------------------------------------------------------
-    | โหลดรายละเอียด (เอกสาร/ผู้ปกครอง) ของคนที่เลือกอยู่ตอนนี้
-    | เรียกซ้ำได้ทุกครั้งที่อยากรีเฟรช เช่น หลังอัปโหลด/ตรวจเอกสารเสร็จ
+    | โหลดรายละเอียดของคำร้องที่เลือกอยู่
     |----------------------------------------------------------------
     */
     const refreshSelectedStudentDetail = useCallback(async () => {
@@ -484,36 +491,30 @@ useEffect(() => {
     }, [selectedStudentId]);
 
     useEffect(() => {
-    if (!selectedStudentId) {
-        return undefined;
-    }
+        if (!selectedStudentId) {
+            return undefined;
+        }
 
-    const current = students.find(
-        (student) => student.id === selectedStudentId
-    );
+        const current = students.find(
+            (student) => student.id === selectedStudentId
+        );
 
-    if (!current || current._detailLoaded) {
-        return undefined;
-    }
+        if (!current || current._detailLoaded) {
+            return undefined;
+        }
 
-    const timerId = window.setTimeout(() => {
-        void refreshSelectedStudentDetail();
-    }, 0);
+        const timerId = window.setTimeout(() => {
+            void refreshSelectedStudentDetail();
+        }, 0);
 
-    return () => {
-        window.clearTimeout(timerId);
-    };
-}, [
-    selectedStudentId,
-    students,
-    refreshSelectedStudentDetail,
-]);
+        return () => {
+            window.clearTimeout(timerId);
+        };
+    }, [selectedStudentId, students, refreshSelectedStudentDetail]);
 
     const selectedStudent = useMemo(() => {
-        // ถ้า login เป็นนักศึกษาจริงอยู่ ต้องเห็นแค่ข้อมูลของตัวเองเท่านั้น
-        // ห้าม fallback ไปโชว์คนอื่นเด็ดขาด (ต่อให้หาไม่เจอเพราะยังไม่มี
-        // คำร้องเลยก็ตาม — คืน null ไปดีกว่าโชว์ข้อมูลผิดคน)
-        if (isAuthenticated && role === "student" && currentUser) {
+        // นักศึกษาที่ login อยู่ เห็นได้แค่คำร้องของตัวเอง
+        if (isAuthenticated && role === "student" && currentUser && !isStaffUser) {
             return (
                 students.find(
                     (student) =>
@@ -523,24 +524,18 @@ useEffect(() => {
             );
         }
 
-        // กรณีอื่น (ยังไม่ login / เป็นเจ้าหน้าที่) ใช้ selectedStudentId ปกติ
+        // เจ้าหน้าที่ / ยังไม่ login ใช้ selectedStudentId ปกติ
         return (
-            students.find(
-                (student) => student.id === selectedStudentId
-            ) ||
+            students.find((student) => student.id === selectedStudentId) ||
             students[0] ||
             null
         );
-    }, [students, selectedStudentId, isAuthenticated, role, currentUser]);
+    }, [students, selectedStudentId, isAuthenticated, role, currentUser, isStaffUser]);
 
-    // เก็บไว้เผื่อหน้าไหนยังเรียกใช้แบบ optimistic local update อยู่
-    // (เช่นตอนพิมพ์หมายเหตุในฟอร์มก่อนกดส่งจริง)
     const updateSelectedStudent = (updatedStudent) => {
         setStudents((current) =>
             current.map((student) =>
-                student.id === updatedStudent.id
-                    ? updatedStudent
-                    : student
+                student.id === updatedStudent.id ? updatedStudent : student
             )
         );
     };
@@ -557,11 +552,13 @@ useEffect(() => {
                 refreshSelectedStudentDetail,
                 role,
                 setRole,
+                homePage,
                 loading,
                 loadError,
                 token,
                 currentUser,
                 isAuthenticated,
+                isStaffUser,
                 login,
                 register,
                 logout,

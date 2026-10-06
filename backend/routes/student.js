@@ -26,6 +26,38 @@ function sendBookingError(res, error, fallbackMessage, logLabel) {
 }
 
 /*
+|--------------------------------------------------------------------------
+| ข้อความ popup "ยื่นเอกสารไม่สำเร็จ" (แก้ได้ที่หน้าตั้งค่า > ตั้งค่าหน้าหลัก)
+| GET /api/student/messages/queue-fail
+|--------------------------------------------------------------------------
+*/
+const QUEUE_FAIL_DEFAULTS = {
+    title: "ยื่นเอกสารไม่สำเร็จ",
+    noShow: "คุณไม่ได้มายื่นเอกสารฉบับจริงตามวันเวลาที่นัดไว้",
+    incomplete: "เจ้าหน้าที่ตรวจเอกสารฉบับจริงในวันนัดแล้ว พบว่าเอกสารยังไม่ครบถ้วน",
+    contact: "กรุณาติดต่อเจ้าหน้าที่กองทุนฯ ณ กองพัฒนานักศึกษา อาคาร 2 ในวันและเวลาราชการ เพื่อดำเนินการต่อ",
+};
+
+router.get("/messages/queue-fail", async (req, res) => {
+    let saved = {};
+    try {
+        const result = await pool.query(
+            `SELECT queue_fail_popup FROM psu_loan.home_content ORDER BY content_id DESC LIMIT 1`
+        );
+        saved = result.rows[0]?.queue_fail_popup || {};
+    } catch (error) {
+        // ยังไม่ได้รัน add_queue_fail_popup_column.sql → ใช้ข้อความเริ่มต้นไปก่อน
+        if (error.code !== "42703") console.error("GET /api/student/messages/queue-fail error:", error);
+    }
+
+    const data = {};
+    for (const key of Object.keys(QUEUE_FAIL_DEFAULTS)) {
+        data[key] = typeof saved[key] === "string" && saved[key].trim() ? saved[key].trim() : QUEUE_FAIL_DEFAULTS[key];
+    }
+    return res.status(200).json({ success: true, data });
+});
+
+/*
 |==========================================================================
 | การจองวันเวลายื่นเอกสาร
 |==========================================================================
@@ -35,10 +67,8 @@ function sendBookingError(res, error, fallbackMessage, logLabel) {
 */
 
 /*
-|------------------------------------------------------------------
 | ช่วงเวลาที่เปิดให้จอง
 | GET /api/student/booking-slots?days=14
-|------------------------------------------------------------------
 */
 router.get("/booking-slots", requireLogin, async (req, res) => {
     try {
@@ -51,10 +81,8 @@ router.get("/booking-slots", requireLogin, async (req, res) => {
 });
 
 /*
-|------------------------------------------------------------------
 | การจองที่ใช้งานอยู่ของคำร้อง (ไม่มี = data: null)
 | GET /api/student/applications/:applicationId/booking
-|------------------------------------------------------------------
 */
 router.get("/applications/:applicationId/booking", requireLogin, async (req, res) => {
     try {
@@ -70,11 +98,9 @@ router.get("/applications/:applicationId/booking", requireLogin, async (req, res
 });
 
 /*
-|------------------------------------------------------------------
 | จอง / เปลี่ยนวันเวลา
 | POST /api/student/bookings
 | Body: { applicationId, slotId }
-|------------------------------------------------------------------
 */
 router.post("/bookings", requireLogin, async (req, res) => {
     try {
@@ -91,11 +117,9 @@ router.post("/bookings", requireLogin, async (req, res) => {
 });
 
 /*
-|------------------------------------------------------------------
 | ยกเลิกการจอง
 | POST /api/student/bookings/cancel
 | Body: { applicationId, reason }
-|------------------------------------------------------------------
 */
 router.post("/bookings/cancel", requireLogin, async (req, res) => {
     try {
@@ -112,13 +136,8 @@ router.post("/bookings/cancel", requireLogin, async (req, res) => {
 });
 
 /*
-|--------------------------------------------------------------------------
-| ดูคำร้องนักศึกษาทั้งหมด — PostgreSQL จริง
-|--------------------------------------------------------------------------
+| ดูคำร้องนักศึกษาทั้งหมด
 | GET /api/student
-|--------------------------------------------------------------------------
-| ใช้ view v_application_overview ที่มีอยู่แล้วใน DatabaseV2.sql
-| (join applications + student_profiles + loan_types ให้พร้อมใช้งาน)
 */
 router.get("/", async (req, res) => {
     try {
@@ -146,13 +165,8 @@ router.get("/", async (req, res) => {
 });
 
 /*
-|--------------------------------------------------------------------------
-| ดูคำร้องนักศึกษารายคน — PostgreSQL จริง
-|--------------------------------------------------------------------------
-| GET /api/student/:id
-|--------------------------------------------------------------------------
-| หมายเหตุ: :id คือ application_id (รหัสคำร้อง) ไม่ใช่ student_id
-| เพราะนักศึกษา 1 คน สามารถมีคำร้องได้หลายภาคการศึกษา
+| ดูคำร้องนักศึกษารายคน
+| GET /api/student/:id   (:id คือ application_id ไม่ใช่ student_id)
 */
 router.get("/:id", async (req, res) => {
     const applicationId = parsePositiveInteger(req.params.id);
@@ -166,12 +180,10 @@ router.get("/:id", async (req, res) => {
 
     try {
         // 1) ข้อมูลคำร้องหลัก (จาก view)
-        const overviewQuery = `
-            SELECT *
-            FROM psu_loan.v_application_overview
-            WHERE application_id = $1
-        `;
-        const overviewResult = await pool.query(overviewQuery, [applicationId]);
+        const overviewResult = await pool.query(
+            `SELECT * FROM psu_loan.v_application_overview WHERE application_id = $1`,
+            [applicationId]
+        );
 
         if (overviewResult.rowCount === 0) {
             return res.status(404).json({
@@ -182,17 +194,16 @@ router.get("/:id", async (req, res) => {
 
         const application = overviewResult.rows[0];
 
-        // 2) รหัสที่ต้องใช้กรองเอกสาร (ดึงจาก applications ดิบ)
-        const applicationKeysQuery = `
-            SELECT loan_type_id, academic_year, semester
-            FROM psu_loan.applications
-            WHERE application_id = $1
-        `;
-        const applicationKeysResult = await pool.query(applicationKeysQuery, [applicationId]);
+        // 2) รหัสที่ต้องใช้กรองเอกสาร
+        const applicationKeysResult = await pool.query(
+            `SELECT loan_type_id, academic_year, semester
+             FROM psu_loan.applications
+             WHERE application_id = $1`,
+            [applicationId]
+        );
         const { loan_type_id, academic_year, semester } = applicationKeysResult.rows[0];
 
-        // เช็คว่าช่วงเวลาเปิดรับยื่นกู้ของเทอมนี้เปิดอยู่ไหม (ใช้บล็อกหน้า
-        // คัดกรองฝั่งนักศึกษาถ้ายังไม่ถึงกำหนดหรือปิดไปแล้ว)
+        // ช่วงเวลาเปิดรับยื่นกู้ของเทอมนี้เปิดอยู่ไหม
         const periodResult = await pool.query(
             `SELECT start_date, end_date, is_open
              FROM psu_loan.application_periods
@@ -200,7 +211,7 @@ router.get("/:id", async (req, res) => {
             [academic_year, semester]
         );
 
-        let periodOpen = true; // ไม่มีการตั้งค่าไว้เลย = ไม่จำกัด (ปลอดภัยไว้ก่อน)
+        let periodOpen = true; // ไม่มีการตั้งค่าไว้เลย = ไม่จำกัด
         let periodMessage = "";
 
         if (periodResult.rowCount > 0) {
@@ -221,19 +232,19 @@ router.get("/:id", async (req, res) => {
             }
         }
 
-        // 3) ผู้ปกครองหลัก (ถ้ามี — ใช้กับผู้กู้อายุต่ำกว่า 20 ปี)
-        const guardianQuery = `
-            SELECT g.prefix, g.first_name, g.last_name, g.relationship, g.phone
-            FROM psu_loan.guardians g
-            JOIN psu_loan.applications a ON a.student_id = g.student_id
-            WHERE a.application_id = $1 AND g.is_primary = TRUE
-        `;
-        const guardianResult = await pool.query(guardianQuery, [applicationId]);
+        // 3) ผู้ปกครองหลัก (ถ้ามี)
+        const guardianResult = await pool.query(
+            `SELECT g.prefix, g.first_name, g.last_name, g.relationship, g.phone
+             FROM psu_loan.guardians g
+             JOIN psu_loan.applications a ON a.student_id = g.student_id
+             WHERE a.application_id = $1 AND g.is_primary = TRUE`,
+            [applicationId]
+        );
         const parent = guardianResult.rows[0] || null;
 
-        // 4) รายการเอกสารที่ต้องใช้ + สถานะปัจจุบัน (ถ้าอัปโหลดแล้ว)
-        const documentsQuery = `
-            SELECT
+        // 4) รายการเอกสารที่ต้องใช้ + สถานะปัจจุบัน
+        const documentsResult = await pool.query(
+            `SELECT
                 dr.requirement_id AS "requirementId",
                 dt.document_code AS "documentCode",
                 dt.document_name AS "documentType",
@@ -264,39 +275,26 @@ router.get("/:id", async (req, res) => {
               AND dr.is_active = TRUE
               AND (dr.min_age IS NULL OR dr.min_age <= $5)
               AND (dr.max_age IS NULL OR dr.max_age >= $5)
-            ORDER BY dr.display_order
-        `;
-        const documentsResult = await pool.query(documentsQuery, [
-            applicationId,
-            loan_type_id,
-            academic_year,
-            semester,
-            application.age,
-        ]);
+            ORDER BY dr.display_order`,
+            [applicationId, loan_type_id, academic_year, semester, application.age]
+        );
 
-        // ประวัติการเปลี่ยนสถานะคำร้องทั้งใบ (เขียนอัตโนมัติผ่าน trigger
-        // trg_application_status_history ทุกครั้งที่ application_status
-        // เปลี่ยน) ใช้แสดงในหน้า "ติดตามสถานะ" ฝั่งนักศึกษา
-        const statusHistoryQuery = `
-            SELECT
+        // ประวัติการเปลี่ยนสถานะคำร้องทั้งใบ
+        const statusHistoryResult = await pool.query(
+            `SELECT
                 old_status AS "oldStatus",
                 new_status AS "newStatus",
                 remark,
                 changed_at AS "changedAt"
             FROM psu_loan.application_status_history
             WHERE application_id = $1
-            ORDER BY changed_at ASC
-        `;
-        const statusHistoryResult = await pool.query(statusHistoryQuery, [
-            applicationId,
-        ]);
+            ORDER BY changed_at ASC`,
+            [applicationId]
+        );
 
-        // ประวัติการตรวจ/ตีกลับ "รายไฟล์" แบบละเอียด — ต่างจาก statusHistory
-        // ด้านบนที่เก็บแค่สถานะรวมทั้งใบ อันนี้บอกได้ว่า "ไฟล์ไหน" "รอบที่
-        // เท่าไหร่" "ใครตรวจ" "เหตุผลอะไร" ดึงข้ามทุกเวอร์ชันของทุกเอกสาร
-        // ในคำร้องนี้มารวมกันเรียงตามเวลา
-        const documentReviewHistoryQuery = `
-            SELECT
+        // ประวัติการตรวจ/ตีกลับรายไฟล์
+        const documentReviewHistoryResult = await pool.query(
+            `SELECT
                 drh.review_round AS "round",
                 drh.old_status AS "oldStatus",
                 drh.new_status AS "newStatus",
@@ -311,19 +309,13 @@ router.get("/:id", async (req, res) => {
             JOIN psu_loan.document_types dt ON dt.document_type_id = dr.document_type_id
             LEFT JOIN psu_loan.staff_profiles sf ON sf.staff_id = drh.reviewed_by
             WHERE ad.application_id = $1
-            ORDER BY drh.reviewed_at ASC
-        `;
-        const documentReviewHistoryResult = await pool.query(
-            documentReviewHistoryQuery,
+            ORDER BY drh.reviewed_at ASC`,
             [applicationId]
         );
 
-        // ประวัติการส่งเอกสาร "ทุกครั้ง" (ทุกเวอร์ชันของทุกรายการ) — 1 แถวต่อ 1
-        // ครั้งที่ส่ง บอกว่าเป็นเอกสารอะไร ส่งครั้งที่เท่าไหร่ ไฟล์ชื่ออะไร สถานะ
-        // ของไฟล์นั้น ใครเป็นผู้ตรวจ และหมายเหตุ (เหตุผลที่ตีกลับ)
-        // ใช้แสดงตารางประวัติในหน้า "ติดตามสถานะ" ฝั่งนักศึกษา
-        const documentSubmissionsQuery = `
-            SELECT
+        // ประวัติการส่งเอกสารทุกครั้ง
+        const documentSubmissionsResult = await pool.query(
+            `SELECT
                 ad.document_id AS "documentId",
                 dt.document_name AS "documentName",
                 ad.version_no AS "versionNo",
@@ -339,12 +331,40 @@ router.get("/:id", async (req, res) => {
             JOIN psu_loan.document_types dt ON dt.document_type_id = dr.document_type_id
             LEFT JOIN psu_loan.staff_profiles sf ON sf.staff_id = ad.reviewed_by
             WHERE ad.application_id = $1
-            ORDER BY ad.uploaded_at DESC, ad.document_id DESC
-        `;
-        const documentSubmissionsResult = await pool.query(
-            documentSubmissionsQuery,
+            ORDER BY ad.uploaded_at DESC, ad.document_id DESC`,
             [applicationId]
         );
+
+        // 5) ผลตรวจเอกสารฉบับจริงวันนัด (จากหน้าจัดการคิวของเจ้าหน้าที่)
+        //    signingStatus = SIGNED → ครบถ้วน, FAILED → เอกสารส่งไม่สำเร็จ ให้ติดต่อเจ้าหน้าที่
+        const signingResult = await pool.query(
+            `SELECT sr.signing_status AS status,
+                    sr.remark,
+                    sr.verified_at AS "verifiedAt",
+                    TO_CHAR(qs.queue_date, 'YYYY-MM-DD') AS "queueDate",
+                    qs.location
+             FROM psu_loan.signing_records sr
+             LEFT JOIN psu_loan.queue_bookings qb ON qb.booking_id = sr.booking_id
+             LEFT JOIN psu_loan.queue_slots qs ON qs.slot_id = qb.slot_id
+             WHERE sr.application_id = $1`,
+            [applicationId]
+        );
+        const signing = signingResult.rows[0] || null;
+
+        // 6) การจองล่าสุดที่ไม่ได้ยกเลิก ใช้ดูว่า "ไม่มาตามนัด" (NO_SHOW) หรือไม่
+        const latestBookingResult = await pool.query(
+            `SELECT qb.booking_status AS status,
+                    TO_CHAR(qs.queue_date, 'YYYY-MM-DD') AS "queueDate",
+                    TO_CHAR(qs.start_time, 'HH24:MI') AS "startTime",
+                    TO_CHAR(qs.end_time, 'HH24:MI') AS "endTime"
+             FROM psu_loan.queue_bookings qb
+             JOIN psu_loan.queue_slots qs ON qs.slot_id = qb.slot_id
+             WHERE qb.application_id = $1 AND qb.booking_status <> 'CANCELLED'
+             ORDER BY qb.booked_at DESC, qb.booking_id DESC
+             LIMIT 1`,
+            [applicationId]
+        );
+        const latestBooking = latestBookingResult.rows[0] || null;
 
         res.status(200).json({
             success: true,
@@ -357,6 +377,8 @@ router.get("/:id", async (req, res) => {
                 documentSubmissions: documentSubmissionsResult.rows,
                 periodOpen,
                 periodMessage,
+                signing,
+                latestBooking,
             },
         });
     } catch (error) {
@@ -374,16 +396,11 @@ router.get("/:id", async (req, res) => {
 | สร้างคำร้องกู้ยืมใหม่
 |--------------------------------------------------------------------------
 | POST /api/student/applications
-|--------------------------------------------------------------------------
 | Body: { studentUserId, loanTypeCode, academicYear, semester, gpax, volunteerHours }
 |--------------------------------------------------------------------------
-| หมายเหตุสำคัญ: ตาราง applications มี CHECK constraint
 | ck_application_semester_data บังคับว่า
 |   - เทอม 1 ต้องมี gpax + volunteer_hours ครบ (ห้าม NULL)
 |   - เทอม 2 ต้องเป็น NULL ทั้งคู่ + eligibility_status = NOT_REQUIRED
-| เพราะงั้น endpoint นี้จึงรวม "คัดกรองคุณสมบัติ" กับ "สร้างคำร้อง" ไว้
-| เป็นขั้นตอนเดียวกันสำหรับเทอม 1 (ตาม schema ที่ออกแบบไว้แต่แรก)
-|--------------------------------------------------------------------------
 */
 router.post("/applications", async (req, res) => {
     try {
@@ -424,7 +441,7 @@ router.post("/applications", async (req, res) => {
             });
         }
 
-        // เช็คว่ายื่นคำร้องเทอม/ปีนี้ไปแล้วหรือยัง (UNIQUE constraint)
+        // เช็คว่ายื่นคำร้องเทอม/ปีนี้ไปแล้วหรือยัง
         const existingResult = await pool.query(
             `SELECT application_id FROM psu_loan.applications
              WHERE student_id = $1 AND academic_year = $2 AND semester = $3`,
@@ -439,7 +456,7 @@ router.post("/applications", async (req, res) => {
             });
         }
 
-        // เช็คช่วงเวลาเปิดรับยื่นกู้ (ตารางเดียวกับที่ใช้บล็อกหน้าคัดกรอง)
+        // เช็คช่วงเวลาเปิดรับยื่นกู้
         const periodResult = await pool.query(
             `SELECT start_date, end_date, is_open
              FROM psu_loan.application_periods
@@ -504,16 +521,10 @@ router.post("/applications", async (req, res) => {
                 });
             }
 
-            // เทียบกับเกณฑ์จริงจาก eligibility_rules (เก็บ rule_id ไว้ผูก
-            // กับคำร้อง แต่ไม่ใช้ค่า threshold จากตารางนี้มาตัดสินผ่าน/ไม่
-            // ผ่านโดยตรงแล้ว เพราะข้อมูลที่ seed ไว้เคยผิดมาก่อน — ใช้เกณฑ์
-            // ที่ตายตัวตามนี้แทน (ยืนยันจากอาจารย์แล้ว):
-            //   - GPAX ต้อง "มากกว่า" 1.80 (ไม่ใช่มากกว่าหรือเท่ากับ) ทุก
-            //     ประเภทผู้กู้เหมือนกันหมด
-            //   - ผู้กู้รายใหม่ (NEW): ชั่วโมงจิตอาสาต้อง "มากกว่า" 1 ชั่วโมง
-            //   - ผู้กู้ต่อเนื่อง 2 ประเภท (CONTINUING_SPECIAL,
-            //     CONTINUING_YEAR): ชั่วโมงจิตอาสาต้อง "มากกว่าหรือเท่ากับ"
-            //     36 ชั่วโมง
+            // เกณฑ์ตายตัว (ยืนยันจากอาจารย์แล้ว):
+            //   - GPAX ต้อง "มากกว่า" 1.80 ทุกประเภทผู้กู้
+            //   - ผู้กู้รายใหม่ (NEW): จิตอาสา "มากกว่า" 1 ชั่วโมง
+            //   - ผู้กู้ต่อเนื่อง: จิตอาสา "มากกว่าหรือเท่ากับ" 36 ชั่วโมง
             const ruleResult = await pool.query(
                 `SELECT eligibility_rule_id
                  FROM psu_loan.eligibility_rules
@@ -537,9 +548,7 @@ router.post("/applications", async (req, res) => {
             const passed = gpaxPassed && hoursPassed;
 
             eligibilityStatus = passed ? "PASSED" : "FAILED";
-            applicationStatus = passed
-                ? "DOCUMENT_REVIEW"
-                : "ELIGIBILITY_FAILED";
+            applicationStatus = passed ? "DOCUMENT_REVIEW" : "ELIGIBILITY_FAILED";
         }
 
         const insertResult = await pool.query(
@@ -587,17 +596,11 @@ router.post("/applications", async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| ข้อมูลส่วนตัว (ไม่ผูกกับคำร้อง) — ใช้ได้ตั้งแต่สมัครสมาชิกเสร็จ
+| ข้อมูลส่วนตัว (ไม่ผูกกับคำร้อง)
 |--------------------------------------------------------------------------
 | GET /api/student/profile/:userId
 | PUT /api/student/profile/:userId
-|--------------------------------------------------------------------------
-| ต่างจาก GET /api/student/:id (ที่ :id คือ application_id) — endpoint
-| นี้ดึง/แก้ student_profiles ตรงๆ ผ่าน user_id เลย ใช้ได้แม้ยังไม่มี
-| คำร้องกู้ยืมสักใบ (เช่นเพิ่ง register ใหม่)
-|--------------------------------------------------------------------------
 */
-
 router.get("/profile/:userId", async (req, res) => {
     try {
         const userId = parsePositiveInteger(req.params.userId);
@@ -769,8 +772,7 @@ router.put("/profile/:userId", async (req, res) => {
         if (error.code === "23514") {
             return res.status(400).json({
                 success: false,
-                message:
-                    "ข้อมูลไม่ถูกต้องตามรูปแบบที่กำหนด (เช่น เลขบัตรประชาชนต้อง 13 หลัก)",
+                message: "ข้อมูลไม่ถูกต้องตามรูปแบบที่กำหนด (เช่น เลขบัตรประชาชนต้อง 13 หลัก)",
             });
         }
 

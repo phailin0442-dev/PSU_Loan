@@ -1,7 +1,8 @@
 import { useApp } from "../context/AppContext";
+import { rememberPage } from "./pageMemory";
 
 function AppNavbar({ setPage }) {
-    const { role, isAuthenticated, currentUser, logout } = useApp();
+    const { role, homePage, isAuthenticated, currentUser, logout } = useApp();
 
     const studentMenus = [
         { id: "student-home", page: "home", label: "หน้าหลัก" },
@@ -19,13 +20,28 @@ function AppNavbar({ setPage }) {
 
     const menus = role === "staff" ? staffMenus : studentMenus;
 
+    // เปลี่ยนหน้าจากเมนู + จำไว้ รีเฟรชแล้วจะกลับมาหน้านี้
+    const go = (page) => {
+        rememberPage(page);
+        setPage(page);
+    };
+
+    // บาง response ของ login ไม่มี fullName → ใช้ชื่ออื่นแทน ไม่ให้เหลือแค่ไอคอน
+    const displayName =
+        currentUser?.fullName ||
+        [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ") ||
+        currentUser?.name ||
+        currentUser?.username ||
+        currentUser?.email ||
+        (role === "staff" ? "เจ้าหน้าที่" : "ผู้ใช้");
+
     return (
         <header className="sticky top-0 z-50 bg-gradient-to-r from-[#08156c] via-[#1033a4] to-[#1858d7] text-white shadow-md">
             <div className="mx-auto max-w-[1800px] px-5 sm:px-8 lg:px-10">
                 <div className="flex min-h-[88px] items-center justify-between gap-5">
                     <button
                         type="button"
-                        onClick={() => setPage("home")}
+                        onClick={() => go(homePage)}
                         className="group flex min-w-0 items-center gap-3 text-left"
                         aria-label="กลับหน้าหลัก"
                     >
@@ -54,9 +70,9 @@ function AppNavbar({ setPage }) {
                         <div className="flex shrink-0 items-center gap-2 rounded-xl bg-white px-2 py-2 shadow-sm sm:gap-3 sm:px-3">
                             <span
                                 className="max-w-[110px] truncate px-1 text-xs font-bold text-[#0a197c] sm:max-w-[230px] sm:text-sm"
-                                title={currentUser?.fullName}
+                                title={displayName}
                             >
-                                👤 {currentUser?.fullName}
+                                👤 {displayName}
                             </span>
 
                             <button
@@ -88,7 +104,7 @@ function AppNavbar({ setPage }) {
                                 <button
                                     key={menu.id}
                                     type="button"
-                                    onClick={() => setPage(menu.page)}
+                                    onClick={() => go(menu.page)}
                                     className="whitespace-nowrap rounded-lg px-4 py-2.5 text-base font-black text-blue-50 transition hover:bg-white/15 hover:text-white active:scale-95 sm:px-5"
                                 >
                                     {menu.label}

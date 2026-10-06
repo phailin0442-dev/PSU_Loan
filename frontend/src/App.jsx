@@ -18,7 +18,7 @@ import StaffReport from "./Pages/staff/StaffReport";
 import StudentList from "./Pages/staff/StudentList";
 import DocumentReview from "./Pages/staff/DocumentReview";
 import StaffBooking from "./Pages/staff/StaffBooking";
-import StaffSettings from "./Pages/staff/StaffSettings";
+import StaffSettings from "./Pages/staff/Staffsettings";
 import Login from "./login/Login";
 
 function AppContent() {

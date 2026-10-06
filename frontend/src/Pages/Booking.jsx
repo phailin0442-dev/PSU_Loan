@@ -34,6 +34,9 @@ const SHADOW_CARD = "0 10px 30px -14px rgba(16,29,92,.18)";
 const SHADOW_ACTIVE = "0 10px 22px -10px rgba(28,43,116,.6)";
 const SHADOW_PINK = "0 10px 22px -10px rgba(227,28,121,.65)";
 
+// เหลือที่ว่างไม่เกินสัดส่วนนี้ของความจุ = "ใกล้เต็ม" (แสดงสีชมพู)
+const LOW_RATIO = 0.2;
+
 // ใช้เป็นค่าเริ่มต้นเมื่อ backend ไม่ส่ง location/detail มา
 const LOCATIONS = {
   name: "กองทุนเงินให้กู้ยืมเพื่อการศึกษา (กยศ.)", // TODO: แก้เป็นชื่อสถานที่จริง
@@ -59,6 +62,8 @@ const CANCEL_REASONS = [
 function getApplicationId(student) {
   return student?.applicationId ?? student?.application_id ?? student?.id ?? null;
 }
+
+const isLow = (remaining, capacity) => remaining > 0 && capacity > 0 && remaining / capacity <= LOW_RATIO;
 
 // ข้อความ + ปุ่มพาไปต่อ เมื่อยังจองไม่ได้ แยกตามสถานะคำร้องจริง
 function lockedInfoOf(status) {
@@ -321,6 +326,49 @@ function TicketRow({ label, value, valueColor }) {
     <div>
       <div style={{ fontSize: ".76rem", color: C.faint }}>{label}</div>
       <div style={{ fontSize: ".92rem", fontWeight: 600, color: valueColor || C.ink }}>{value}</div>
+    </div>
+  );
+}
+
+/* วงแหวนแสดงที่ว่างที่เหลือ: เส้นหดตามจำนวนที่ว่าง เปลี่ยนเป็นสีชมพูเมื่อใกล้เต็ม */
+function SeatRing({ remaining, capacity, caption, size = 136 }) {
+  const stroke = 10;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const ratio = capacity > 0 ? Math.min(remaining / capacity, 1) : 0;
+  const full = remaining === 0;
+  const low = isLow(remaining, capacity);
+  const color = full ? C.faint : low ? C.pink : C.navy;
+
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div role="img" aria-label={full ? "เต็มแล้ว" : `เหลือที่ว่าง ${remaining} จาก ${capacity} ที่`}
+        style={{ position: "relative", width: size, height: size, margin: "0 auto" }}>
+        <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }} aria-hidden="true">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={C.soft} strokeWidth={stroke} />
+          {ratio > 0 && (
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+              strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={circ * (1 - ratio)}
+              style={{ transition: "stroke-dashoffset .4s ease, stroke .2s" }} />
+          )}
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "grid", placeContent: "center" }}>
+          <span style={{ fontSize: ".78rem", fontWeight: 600, color: C.muted }}>
+            {full ? "เต็มแล้ว" : "เหลือที่ว่าง"}
+          </span>
+          <span style={{ fontFamily: HEAD, fontWeight: 800, fontSize: "2.1rem", lineHeight: 1.1, color }}>
+            {remaining}
+          </span>
+        </div>
+      </div>
+      {caption && (
+        <div style={{ marginTop: 10, fontFamily: HEAD, fontWeight: 700, fontSize: ".95rem", color: C.navy }}>
+          {caption}
+        </div>
+      )}
+      {low && (
+        <div style={{ marginTop: 4, fontSize: ".76rem", fontWeight: 700, color: C.pink }}>ใกล้เต็มแล้ว</div>
+      )}
     </div>
   );
 }
@@ -621,6 +669,23 @@ function Booking({ setPage }) {
     );
   }
 
+  /* ---------- วันนัดไม่สำเร็จ (ไม่มา / เอกสารไม่ครบ) ---------- */
+  if (selectedStudent?.queueFailed) {
+    return shell(
+      <StateCard
+        icon={<span style={{ color: C.red }}><IconInfo /></span>}
+        title="ยื่นเอกสารไม่สำเร็จ"
+        text={`${selectedStudent.queueFailReason} กรุณาติดต่อเจ้าหน้าที่กองทุนฯ ในวันและเวลาราชการ เพื่อดำเนินการต่อ`}
+        action={
+          <button type="button" className="bk-cta" onClick={() => goTo("status")} style={primaryCtaStyle}>
+            ดูสถานะคำขอ
+          </button>
+        }
+      />,
+      900,
+    );
+  }
+
   /* ---------- ยังจองไม่ได้ (แยกข้อความตามสถานะจริง) ---------- */
   if (!canBook) {
     const info = lockedInfoOf(statusCode);
@@ -870,9 +935,9 @@ function Booking({ setPage }) {
                         onClick={() => { setDateId(day.id); setSlotId(null); setError(""); }}
                         style={{ ...pillOptionStyle(active, full), minWidth: 132, textAlign: "left" }}>
                         <strong style={{ display: "block", fontSize: ".9rem" }}>{day.label}</strong>
-                        <span style={{ display: "block", marginTop: 4, fontSize: ".74rem", color: active ? "#DDE7FF" : C.muted }}>
-                          {full ? "เต็มแล้ว" : `เหลือ ${day.totalRemaining} / ${day.totalCapacity} ที่`}
-                        </span>
+                        {full && (
+                          <span style={{ display: "block", marginTop: 4, fontSize: ".78rem", color: C.muted }}>เต็มแล้ว</span>
+                        )}
                       </button>
                     );
                   })}
@@ -897,13 +962,15 @@ function Booking({ setPage }) {
                       <button key={slot.slotId} type="button" className="bk-pill"
                         aria-pressed={active} disabled={disabled}
                         onClick={() => { setSlotId(slot.slotId); setError(""); }}
-                        style={{ ...pillOptionStyle(active, disabled), minHeight: 72, padding: "10px 12px" }}>
+                        style={{ ...pillOptionStyle(active, disabled), minHeight: 56, padding: "10px 12px" }}>
                         <strong style={{ display: "block", fontSize: ".9rem" }}>
                           {active ? "✓ " : ""}{slot.startTime}–{slot.endTime}
                         </strong>
-                        <span style={{ display: "block", marginTop: 5, fontSize: ".74rem", color: active ? "#DDE7FF" : C.muted }}>
-                          {isCurrent ? "นัดปัจจุบัน" : full ? `เต็ม ${slot.booked}/${slot.capacity} คน` : `เหลือ ${slot.remaining}/${slot.capacity} คน`}
-                        </span>
+                        {(isCurrent || full) && (
+                          <span style={{ display: "block", marginTop: 5, fontSize: ".78rem", color: C.muted }}>
+                            {isCurrent ? "นัดปัจจุบัน" : "เต็มแล้ว"}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -922,6 +989,24 @@ function Booking({ setPage }) {
           }}>
             <p style={{ margin: "0 0 4px", color: C.ink, fontSize: "1rem", fontWeight: 800, fontFamily: HEAD }}>สรุปการจอง</p>
             <p style={{ margin: "0 0 16px", color: C.faint, fontSize: ".8rem" }}>ตรวจสอบข้อมูลก่อนยืนยัน</p>
+
+            {selectedDay && (
+              <div style={{ paddingBottom: 16 }}>
+                {selectedSlot ? (
+                  <SeatRing
+                    remaining={selectedSlot.remaining}
+                    capacity={selectedSlot.capacity}
+                    caption={`รอบ ${timeRange(selectedSlot.startTime, selectedSlot.endTime)}`}
+                  />
+                ) : (
+                  <SeatRing
+                    remaining={selectedDay.totalRemaining}
+                    capacity={selectedDay.totalCapacity}
+                    caption={`รวมทั้งวัน ${selectedDay.label}`}
+                  />
+                )}
+              </div>
+            )}
 
             <div style={{ display: "grid", gap: 14, borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`, padding: "15px 0" }}>
               <TicketRow label="สถานที่" value={selectedDay?.location || days[0]?.location || LOCATIONS.name} />
