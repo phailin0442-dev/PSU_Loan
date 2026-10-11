@@ -7,7 +7,7 @@ function AppNavbar({ setPage }) {
     const studentMenus = [
         { id: "student-home", page: "home", label: "หน้าหลัก" },
         { id: "student-profile", page: "studentProfiles", label: "ข้อมูลของฉัน" },
-        { id: "student-loan-application", page: "eligibility", label: "คำขอกู้ยืมเงิน กยศ." },
+        { id: "student-loan-application", page: "eligibility", label: "คำขอกู้ยืม กยศ." },
         { id: "student-status", page: "status", label: "ติดตามสถานะ" },
     ];
 

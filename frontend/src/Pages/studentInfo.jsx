@@ -442,6 +442,13 @@ function StudentInfo({ setPage }) {
                                         type="date"
                                         value={formData.birthDate}
                                         onChange={handleChange}
+                                        max={new Date().toISOString().slice(0, 10)}
+                                        hint={
+                                            formData.birthDate
+                                                ? `อายุ ${ageFromBirthDate(formData.birthDate)} ปี · ระบบใช้อายุนี้ในการคัดกรอง`
+                                                : "ยังไม่ได้เลือกวันเกิด · ระบบใช้คำนวณอายุเพื่อคัดกรอง"
+                                        }
+                                        hintTone={formData.birthDate ? "ok" : "warn"}
                                     />
 
                                     <Input
@@ -1003,6 +1010,16 @@ const FIELD_OK =
 const FIELD_INVALID =
     "border-red-400 bg-red-50 hover:border-red-500 focus:border-red-500 focus:bg-white focus:ring-red-100";
 
+// อายุเต็มปี ณ วันนี้ จากวันเกิดรูปแบบ YYYY-MM-DD
+function ageFromBirthDate(value) {
+    const [y, m, d] = String(value).slice(0, 10).split("-").map(Number);
+    if (!y || !m || !d) return "-";
+    const now = new Date();
+    let age = now.getFullYear() - y;
+    if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age -= 1;
+    return age < 0 ? "-" : age;
+}
+
 function Input({
     label,
     name,
@@ -1013,8 +1030,19 @@ function Input({
     invalid = false,
     placeholder = "",
     suffix = "",
+    hint = "",
+    hintTone = "",
     ...inputProps
 }) {
+    // ช่องวันที่ที่ยังว่าง: เบราว์เซอร์จะโชว์ "วว/ดด/ปปปป" เป็นตัวเข้มจนดูเหมือนกรอกแล้ว
+    // จึงทำให้เป็นสีเทาเหมือน placeholder จนกว่าจะเลือกวันที่จริง
+    const emptyDate = type === "date" && !value;
+    const hintClass =
+        invalid ? "text-red-600"
+            : hintTone === "warn" ? "text-amber-700"
+                : hintTone === "ok" ? "text-emerald-700"
+                    : "text-gray-500";
+
     return (
         <label className="block min-w-0">
             <span className="text-xs font-black text-[#07116f] sm:text-sm">
@@ -1033,7 +1061,7 @@ function Input({
                     required={required}
                     aria-invalid={invalid || undefined}
                     className={`h-11 w-full rounded-xl border px-3.5 text-sm font-semibold text-gray-800 outline-none transition placeholder:font-normal placeholder:text-gray-400 focus:ring-4 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${invalid ? FIELD_INVALID : FIELD_OK
-                        } ${suffix ? "pr-14" : ""}`}
+                        } ${suffix ? "pr-14" : ""} ${emptyDate ? "font-normal! text-gray-400!" : ""}`}
                     {...inputProps}
                 />
 
@@ -1043,6 +1071,12 @@ function Input({
                     </span>
                 )}
             </div>
+
+            {hint && (
+                <span className={`mt-1.5 block text-xs font-semibold ${hintClass}`}>
+                    {hint}
+                </span>
+            )}
         </label>
     );
 }
