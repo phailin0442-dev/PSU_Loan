@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchQueueBoard,
   fetchSlotBookings,
@@ -14,6 +14,11 @@ import {
 |   1. เลือกวัน → 2. เลือกรอบเวลา → 3. รายชื่อนักศึกษาในรอบนั้น
 |   แต่ละคน: มา / ไม่มา → ถ้ามา: เอกสารครบถ้วน / ไม่ครบถ้วน
 |   ไม่ครบถ้วน → นักศึกษาจะเห็น "เอกสารส่งไม่สำเร็จ" และ popup ให้ติดต่อเจ้าหน้าที่
+|
+| ปรับปรุง:
+|   - ป้าย "วันนี้" อยู่ในการ์ดวัน ไม่ถูก overflow ตัดอีกต่อไป
+|   - เลื่อนแถบวันไปที่วันที่เลือกอัตโนมัติ + ปุ่ม "กลับไปวันนี้"
+|   - ปุ่มกรองรายชื่อตามสถานะ พร้อมจำนวน
 |--------------------------------------------------------------------------
 */
 
@@ -48,6 +53,8 @@ const SUMMARY_KEYS = [
   ["completed", "ครบถ้วน"],
   ["failed", "ไม่ครบ"],
 ];
+
+const FILTERS = [["all", "ทั้งหมด"], ...SUMMARY_KEYS];
 
 const nf = (n) => Number(n || 0).toLocaleString("th-TH");
 
@@ -206,9 +213,12 @@ function StaffBooking() {
   const [slotError, setSlotError] = useState("");
 
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState({ type: "", text: "" });
   const [failTarget, setFailTarget] = useState(null);
+
+  const dayStripRef = useRef(null);
 
   /* ---------- โหลดวัน/รอบ ---------- */
   useEffect(() => {
@@ -260,6 +270,17 @@ function StaffBooking() {
     activeDay?.slots[0] ||
     null;
   const activeSlotId = activeSlot?.slotId ?? null;
+  const activeDate = activeDay?.date ?? null;
+
+  // เลื่อนแถบวันให้วันที่เลือกอยู่กลางจอ (วันนี้ที่อยู่ไกลก็เห็นทันที)
+  useEffect(() => {
+    const strip = dayStripRef.current;
+    if (!strip || !activeDate) return;
+    const el = strip.querySelector(`[data-date="${activeDate}"]`);
+    if (!el) return;
+    const left = el.offsetLeft - (strip.clientWidth - el.clientWidth) / 2;
+    strip.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+  }, [activeDate, days.length]);
 
   /* ---------- โหลดรายชื่อในรอบ ---------- */
   useEffect(() => {
@@ -287,6 +308,7 @@ function StaffBooking() {
     setPickedSlot(null);
     setSlotLoading(true);
     setQuery("");
+    setFilter("all");
   };
 
   const pickSlot = (slotId) => {
@@ -294,6 +316,7 @@ function StaffBooking() {
     setPickedSlot(slotId);
     setSlotLoading(true);
     setQuery("");
+    setFilter("all");
   };
 
   const refreshAll = () => {
@@ -309,13 +332,21 @@ function StaffBooking() {
     [slotData, activeSlotId]
   );
 
+  // จำนวนคนต่อสถานะในรอบที่ดูอยู่ (ใช้กับปุ่มกรอง)
+  const stateCounts = useMemo(() => {
+    const c = { all: bookings.length, waiting: 0, checkedIn: 0, noShow: 0, completed: 0, failed: 0 };
+    for (const b of bookings) c[personState(b)] += 1;
+    return c;
+  }, [bookings]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return bookings;
-    return bookings.filter(
-      (b) => (b.name || "").toLowerCase().includes(q) || (b.studentCode || "").toLowerCase().includes(q)
-    );
-  }, [bookings, query]);
+    return bookings.filter((b) => {
+      if (filter !== "all" && personState(b) !== filter) return false;
+      if (!q) return true;
+      return (b.name || "").toLowerCase().includes(q) || (b.studentCode || "").toLowerCase().includes(q);
+    });
+  }, [bookings, query, filter]);
 
   // ยอดรวมของวันที่เลือก (จากข้อมูลรอบ)
   const daySummary = useMemo(() => {
@@ -370,6 +401,7 @@ function StaffBooking() {
   };
 
   const isFutureDay = Boolean(activeDay && today && activeDay.date > today);
+  const todayInList = Boolean(today && days.some((d) => d.date === today));
 
   /* ---------- แสดงผล ---------- */
   return (
@@ -443,29 +475,51 @@ function StaffBooking() {
           <>
             {/* 1. เลือกวัน */}
             <section className="rounded-2xl bg-white p-6 sm:p-7">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-lg font-black">เลือกวัน</h2>
-                <p className="text-sm text-gray-500">{board.period.label}</p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-baseline gap-x-3">
+                  <h2 className="text-lg font-black">เลือกวัน</h2>
+                  <p className="text-sm text-gray-500">{board.period.label}</p>
+                </div>
+                {todayInList && activeDay?.date !== today && (
+                  <button
+                    type="button"
+                    onClick={() => pickDate(today)}
+                    className={`rounded-full bg-[#E31C79] px-4 py-1.5 text-xs font-black text-white hover:bg-[#c8156a] ${focus}`}
+                  >
+                    กลับไปวันนี้
+                  </button>
+                )}
               </div>
-              <div className="-mx-1 mt-4 flex gap-2.5 overflow-x-auto px-1 pb-2">
+
+              <div ref={dayStripRef} className="relative -mx-1 mt-4 flex gap-2.5 overflow-x-auto px-1 pb-2 pt-1">
                 {days.map((d) => {
                   const p = dateParts(d.date);
                   const active = d.date === activeDay?.date;
                   const isToday = d.date === today;
                   const past = today && d.date < today;
+                  const border = active
+                    ? "border-[#07116f] bg-[#07116f] text-white shadow-md"
+                    : isToday
+                      ? "border-[#E31C79] bg-white hover:border-[#c8156a]"
+                      : "border-[#dbe6fb] bg-white hover:border-blue-300";
                   return (
                     <button
                       key={d.date}
                       type="button"
+                      data-date={d.date}
                       aria-pressed={active}
+                      aria-label={`${p.full}${isToday ? " (วันนี้)" : ""} จอง ${d.total} จาก ${d.capacity} คน`}
                       onClick={() => pickDate(d.date)}
-                      className={`relative w-[96px] shrink-0 rounded-2xl border-2 px-2 py-3 text-center transition ${focus} ${active ? "border-[#07116f] bg-[#07116f] text-white shadow-md" : "border-[#dbe6fb] bg-white hover:border-blue-300"} ${past && !active ? "opacity-60" : ""}`}
+                      className={`w-[96px] shrink-0 rounded-2xl border-2 px-2 pb-3 pt-2 text-center transition ${focus} ${border} ${past && !active ? "opacity-60" : ""}`}
                     >
-                      {isToday && (
-                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[#E31C79] px-2 py-0.5 text-[10px] font-black text-white">
-                          วันนี้
-                        </span>
-                      )}
+                      {/* แถวป้ายวันนี้: จองที่ไว้ให้ทุกการ์ดสูงเท่ากัน และไม่โดน overflow ตัด */}
+                      <span className="mb-1 flex h-5 items-center justify-center">
+                        {isToday && (
+                          <span className="rounded-full bg-[#E31C79] px-2.5 py-0.5 text-[11px] font-black leading-none text-white">
+                            วันนี้
+                          </span>
+                        )}
+                      </span>
                       <span className="block text-xs font-bold opacity-70">{p.weekday}</span>
                       <span className="block text-2xl font-black leading-tight">{p.day}</span>
                       <span className="block text-[11px] font-bold opacity-70">{p.month}</span>
@@ -489,7 +543,7 @@ function StaffBooking() {
                     {SUMMARY_KEYS.map(([k, label]) => (
                       <div key={k} className="rounded-xl bg-[#f6f9ff] px-1 py-2">
                         <span className="block text-lg font-black tabular-nums">{nf(daySummary[k])}</span>
-                        <span className="block text-[10px] font-bold text-gray-500">{label}</span>
+                        <span className="block text-[11px] font-bold text-gray-500">{label}</span>
                       </div>
                     ))}
                   </div>
@@ -556,6 +610,30 @@ function StaffBooking() {
                     )}
                   </div>
 
+                  {/* ปุ่มกรองตามสถานะ */}
+                  {bookings.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="กรองตามสถานะ">
+                      {FILTERS.map(([k, label]) => {
+                        const on = filter === k;
+                        const count = stateCounts[k];
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => setFilter(k)}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-black ring-1 ring-inset transition ${focus} ${on ? "bg-[#07116f] text-white ring-[#07116f]" : "bg-white text-[#07116f] ring-[#c9d8f5] hover:bg-[#f6f9ff]"}`}
+                          >
+                            {label}
+                            <span className={`rounded-full px-1.5 py-px text-[11px] tabular-nums ${on ? "bg-white/20" : "bg-[#eef3ff]"}`}>
+                              {nf(count)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {isFutureDay && (
                     <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
                       ยังไม่ถึงวันนัด ดูรายชื่อได้ แต่จะบันทึกการมาได้ในวันนัดเท่านั้น
@@ -596,7 +674,9 @@ function StaffBooking() {
                       ยังไม่มีนักศึกษาจองรอบนี้
                     </p>
                   ) : filtered.length === 0 ? (
-                    <p className="mt-6 px-4 py-10 text-center text-sm text-gray-500">ไม่พบชื่อที่ค้นหา</p>
+                    <p className="mt-6 px-4 py-10 text-center text-sm text-gray-500">
+                      ไม่พบรายชื่อที่ตรงกับตัวกรอง
+                    </p>
                   ) : (
                     <ul className={`mt-5 space-y-3 transition-opacity ${slotLoading ? "opacity-60" : ""}`}>
                       {filtered.map((b, i) => {
