@@ -179,7 +179,7 @@ export function getQualificationCategories(
         "VOLUNTEER_EVIDENCE",
     ];
 }
-
+//ใช้เลือกหมวดหมู่เอกสารที่ผู้กู้ต้องส่ง
 export function getRequiredDocumentCategories(
     student
 ) {

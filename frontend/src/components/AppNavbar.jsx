@@ -1,18 +1,25 @@
+import { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { rememberPage } from "./pageMemory";
 
-function AppNavbar({ setPage }) {
+function AppNavbar({ setPage, page }) {
     const { role, homePage, isAuthenticated, currentUser, logout } = useApp();
 
+    // สำรอง: ถ้า App.jsx ยังไม่ได้ส่ง page มา ให้จำหน้าที่กดจากเมนูไว้เอง
+    // (ถ้าส่ง page มาแล้ว จะใช้ค่าจาก page เสมอ ซึ่งแม่นยำที่สุด)
+    const [clickedPage, setClickedPage] = useState(null);
+    const currentPage = page ?? clickedPage ?? homePage;
+
+    // alsoActive = หน้าย่อยที่ถือว่าอยู่ในเมนูนี้ด้วย (ไฮไลต์เมนูแม่)
     const studentMenus = [
         { id: "student-home", page: "home", label: "หน้าหลัก" },
-        { id: "student-profile", page: "studentProfiles", label: "ข้อมูลของฉัน" },
-        { id: "student-loan-application", page: "eligibility", label: "คำขอกู้ยืม กยศ." },
+        { id: "student-profile", page: "studentProfiles", alsoActive: ["studentInfo"], label: "ข้อมูลของฉัน" },
+        { id: "student-loan-application", page: "eligibility", alsoActive: ["uploadDocuments", "booking"], label: "คำขอกู้ยืม กยศ." },
         { id: "student-status", page: "status", label: "ติดตามสถานะ" },
     ];
 
     const staffMenus = [
-        { id: "staff-student-list", page: "studentList", label: "จัดการคำขอกู้ยืม" },
+        { id: "staff-student-list", page: "studentList", alsoActive: ["documentReview", "updateStatus"], label: "จัดการคำขอกู้ยืม" },
         { id: "staff-booking", page: "staffBooking", label: "จัดการคิว" },
         { id: "staff-report", page: "staffReport", label: "รายงาน" },
         { id: "staff-settings", page: "staffSettings", label: "ตั้งค่า" },
@@ -21,9 +28,10 @@ function AppNavbar({ setPage }) {
     const menus = role === "staff" ? staffMenus : studentMenus;
 
     // เปลี่ยนหน้าจากเมนู + จำไว้ รีเฟรชแล้วจะกลับมาหน้านี้
-    const go = (page) => {
-        rememberPage(page);
-        setPage(page);
+    const go = (target) => {
+        rememberPage(target);
+        setClickedPage(target);
+        setPage(target);
     };
 
     // บาง response ของ login ไม่มี fullName → ใช้ชื่ออื่นแทน ไม่ให้เหลือแค่ไอคอน
@@ -100,16 +108,32 @@ function AppNavbar({ setPage }) {
                 <nav className="border-t border-white/20" aria-label="เมนูหลัก">
                     <div className="overflow-x-auto">
                         <div className="flex min-w-max items-center gap-1 py-2 sm:justify-center">
-                            {menus.map((menu) => (
-                                <button
-                                    key={menu.id}
-                                    type="button"
-                                    onClick={() => go(menu.page)}
-                                    className="whitespace-nowrap rounded-lg px-4 py-2.5 text-base font-black text-blue-50 transition hover:bg-white/15 hover:text-white active:scale-95 sm:px-5"
-                                >
-                                    {menu.label}
-                                </button>
-                            ))}
+                            {menus.map((menu) => {
+                                const active =
+                                    currentPage === menu.page ||
+                                    (menu.alsoActive || []).includes(currentPage);
+
+                                return (
+                                    <button
+                                        key={menu.id}
+                                        type="button"
+                                        aria-current={active ? "page" : undefined}
+                                        onClick={() => go(menu.page)}
+                                        className={`relative whitespace-nowrap rounded-lg px-4 py-2.5 text-base font-black transition active:scale-95 sm:px-5 ${active
+                                                ? "pb-3.5 text-white"
+                                                : "text-blue-50 hover:bg-white/15 hover:text-white"
+                                            }`}
+                                    >
+                                        {menu.label}
+                                        {active && (
+                                            <span
+                                                aria-hidden="true"
+                                                className="absolute inset-x-4 bottom-1 h-[3px] rounded-full bg-white"
+                                            />
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </nav>

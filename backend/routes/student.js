@@ -4,7 +4,7 @@ const queueService = require("../services/queueService");
 const { requireLogin } = require("../middleware/jwtAuth");
 
 const router = express.Router();
-
+//ตรวจสอบว่า่าที่รับมาเนี้ย เป็นจำนวนเต็มบวกมั้ย
 function parsePositiveInteger(value) {
     const parsedValue = Number(value);
 
@@ -14,10 +14,10 @@ function parsePositiveInteger(value) {
 
     return parsedValue;
 }
-
+//จัดการ Error ของการจองคิว (เช่น slot เต็ม, ไม่ใช่ของ user นี้, ไม่พบ applicationId, ไม่พบ slotId, slot หมดเวลาแล้ว)
 function sendBookingError(res, error, fallbackMessage, logLabel) {
     if (!error.status) console.error(logLabel, error);
-
+//ถ้ามันมีปํญหา จะส่งออกข้อมความเตือน 
     return res.status(error.status || 500).json({
         success: false,
         code: error.code,
@@ -313,7 +313,7 @@ router.get("/:id", async (req, res) => {
             [applicationId]
         );
 
-        // ประวัติการส่งเอกสารทุกครั้ง
+        // ประวัติการส่งเอกสารทุกครั้ง พวกเวอร์ชั่นส่งเอกสาร
         const documentSubmissionsResult = await pool.query(
             `SELECT
                 ad.document_id AS "documentId",
@@ -415,7 +415,7 @@ router.post("/applications", async (req, res) => {
 
         const parsedStudentUserId = parsePositiveInteger(studentUserId);
         const parsedSemester = parsePositiveInteger(semester);
-
+        //ตรวจสอบข้อมูงเบื้องต้นว่ามีครบหรือไม่ ถ้าไม่ครบจะส่ง error 400
         if (
             !parsedStudentUserId ||
             !loanTypeCode ||
@@ -531,11 +531,12 @@ router.post("/applications", async (req, res) => {
                  WHERE loan_type_id = $1 AND academic_year = $2 AND semester = $3`,
                 [loanTypeId, academicYear, parsedSemester]
             );
-
+            //แล้วเก็บค่า GPAX ชั่วโมงจิตอาสา และรหัสเกณฑ์ไว้ในตัวแปร
             finalGpax = parsedGpax;
             finalVolunteerHours = parsedHours;
             eligibilityRuleId = ruleResult.rows[0]?.eligibility_rule_id || null;
 
+            //เกณฑ์ที่ใช้ตัดสิน
             const MIN_GPAX = 1.8;
             const minVolunteerHours = loanTypeCode === "NEW" ? 1 : 36;
 
@@ -550,7 +551,7 @@ router.post("/applications", async (req, res) => {
             eligibilityStatus = passed ? "PASSED" : "FAILED";
             applicationStatus = passed ? "DOCUMENT_REVIEW" : "ELIGIBILITY_FAILED";
         }
-
+        //บันทึกลงฐานข้อมูล
         const insertResult = await pool.query(
             `INSERT INTO psu_loan.applications
                 (student_id, loan_type_id, eligibility_rule_id, academic_year,

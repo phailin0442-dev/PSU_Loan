@@ -72,7 +72,6 @@ const DOC_STATUS = {
     MISSING: { label: "ยังไม่ได้ส่ง", bg: C.amberBg, color: C.amber },
 };
 
-const DONE_STATUSES = ["SIGNED", "CENTRAL_SUBMITTED", "COMPLETED"];
 const GENERIC_REMARKS = ["Application created", "Status updated"];
 
 /* ---------- ฟังก์ชันช่วย ---------- */
@@ -104,7 +103,7 @@ function formatDateTime(value) {
         minute: "2-digit",
     });
 }
-
+//แปลงวันที่
 function formatDate(value) {
     if (!value) return "-";
     return new Date(value).toLocaleDateString("th-TH", {
@@ -143,7 +142,7 @@ function getProgress(status, docsComplete) {
             return { current: 1, mode: "normal" };
     }
 }
-
+//กำหนดสถานะของแต่ละขั้นตอน (done, active, idle, failed, revision) โดยอิงจาก progress
 function stepState(n, progress) {
     if (progress.mode === "cancelled") return "idle";
     if (progress.current >= 7) return "done";
@@ -165,7 +164,7 @@ function nextStepOf(status, docsComplete, revisionCount) {
             return {
                 title: "คัดกรองคุณสมบัติ",
                 text: "กรอก GPAX และชั่วโมงจิตอาสา พร้อมแนบหลักฐาน เพื่อไปขั้นตอนอัปโหลดเอกสาร",
-                cta: { label: "ไปคัดกรองคุณสมบัติ", page: "eligibility" },
+                cta: { label: "ไปคัดกรองคุณสมบัติ", page: "eligibility" },//ถ้าทุกอย่างผ่าน
             };
         case "ELIGIBILITY_FAILED":
             return {
@@ -221,7 +220,7 @@ function nextStepOf(status, docsComplete, revisionCount) {
             return { title: "-", text: "", cta: null };
     }
 }
-
+// ไม่ได้เปลี่ยนสถานะคำร้อง แต่รวบรวมและจัดรูปแบบประวัติที่มีอยู่ให้พร้อมแสดงในหน้าเว็บ
 function buildTimeline(detail) {
     return (detail?.statusHistory || [])
         .map((h) => ({
@@ -243,8 +242,8 @@ function groupSubmissions(rows) {
         map.get(key).push(r);
     }
     return [...map.entries()].map(([name, list]) => {
-        const sorted = [...list].sort((a, b) => (b.versionNo || 0) - (a.versionNo || 0));
-        const latest = sorted.find((r) => r.isCurrent) || sorted[0];
+        const sorted = [...list].sort((a, b) => (b.versionNo || 0) - (a.versionNo || 0));//ครั้งล่าสุดขึ้นก่อน
+        const latest = sorted.find((r) => r.isCurrent) || sorted[0];//ปัจจุบัน
         return { name, latest, older: sorted.filter((r) => r !== latest) };
     });
 }
@@ -342,9 +341,6 @@ const css = `
 .sx-tl-note { font-size: .82rem; color: ${C.muted}; margin-top: 2px; }
 
 /* ---- history ---- */
-.sx-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 12px; }
-.sx-tab { border: 1.5px solid ${C.line}; background: #fff; color: ${C.ink}; font-weight: 600; font-size: .86rem; padding: 8px 16px; border-radius: 10px; cursor: pointer; }
-.sx-tab[aria-selected="true"] { background: ${C.navy}; border-color: ${C.navy}; color: #fff; }
 .sx-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .sx-filters label { display: grid; gap: 4px; font-size: .76rem; color: ${C.faint}; }
 .sx-filters select { border: 1.5px solid ${C.line}; border-radius: 10px; padding: 8px 12px; background: #fff; font-family: inherit; font-size: .88rem; color: ${C.ink}; min-width: 160px; }
@@ -406,7 +402,7 @@ function DocumentRow({ group }) {
                 {group.older.length > 0 && (
                     <>
                         <button type="button" className="sx-more" aria-expanded={showOlder} onClick={() => setShowOlder((v) => !v)}>
-                            {showOlder ? "ซ่อนการส่งก่อนหน้า" : `ดูการส่งก่อนหน้า (${group.older.length})`}
+                            {showOlder ? "ซ่อนการส่งก่อนหน้า" : `ดูการส่งก่อนหน้า (${group.older.length})`}// ปุ่มกางดูฉบับเก่า
                         </button>
                         {showOlder && (
                             <ol className="sx-versions">
@@ -427,8 +423,8 @@ function DocumentRow({ group }) {
 }
 
 function DocumentList({ detail }) {
-    const groups = useMemo(() => groupSubmissions(detail?.documentSubmissions), [detail]);
-    const missing = (detail?.requiredDocuments || []).filter((d) => d.status === "ยังไม่อัปโหลด");
+    const groups = useMemo(() => groupSubmissions(detail?.documentSubmissions), [detail]);//รายการเอกสารที่ส่งเข้ามาแล้ว
+    const missing = (detail?.requiredDocuments || []).filter((d) => d.status === "ยังไม่อัปโหลด");//นสยการเอกสารจำเป็นต้องส่ง
     const approved = groups.filter((g) => g.latest.status === "APPROVED").length;
     const total = groups.length + missing.length;
 
@@ -531,7 +527,6 @@ function Status({ setPage } = {}) {
     const [load, setLoad] = useState({ status: "loading", message: "" });
     const [apps, setApps] = useState([]);
     const [details, setDetails] = useState({});
-    const [tab, setTab] = useState("current");
     const [yearFilter, setYearFilter] = useState("ALL");
     const [loanFilter, setLoanFilter] = useState("ALL");
     const [reloadKey, setReloadKey] = useState(0);
@@ -612,9 +607,13 @@ function Status({ setPage } = {}) {
     const filtered = others.filter((a) =>
         (yearFilter === "ALL" || a.academic_year === yearFilter) &&
         (loanFilter === "ALL" || a.loan_type_name === loanFilter));
-    const currentList = filtered.filter((a) => !DONE_STATUSES.includes(a.application_status));
-    const doneList = filtered.filter((a) => DONE_STATUSES.includes(a.application_status));
-    const shownList = tab === "current" ? currentList : doneList;
+    // ประวัติคำขอกู้ยืม: แสดงทุกคำขอในภาคการศึกษาอื่น ทั้งที่สำเร็จและไม่สำเร็จ
+    // (เช่น ไม่ผ่านการคัดกรอง) เรียงจากปีการศึกษา/เทอมล่าสุดก่อน
+    const historyList = [...filtered].sort(
+        (a, b) =>
+            Number(b.academic_year) - Number(a.academic_year) ||
+            Number(b.semester) - Number(a.semester),
+    );
 
     const shell = (children) => (
         <main className="sx">
@@ -735,24 +734,12 @@ function Status({ setPage } = {}) {
 
             {/* ---------- คำขอย้อนหลัง ---------- */}
             <section className="sx-panel">
-                <h2 className="sx-h2">คำขอกู้ยืมที่สำเร็จแล้ว</h2>
+                <h2 className="sx-h2">ประวัติคำขอกู้ยืม</h2>
 
                 {others.length === 0 ? (
                     <div className="sx-empty" style={{ marginTop: 14 }}>ยังไม่มีคำขอในภาคการศึกษาอื่น</div>
                 ) : (
-                    <>
-                        <div role="tablist" className="sx-tabs">
-                            {[
-                                { key: "current", label: "กำลังดำเนินการ", count: currentList.length },
-                                { key: "done", label: "สำเร็จแล้ว", count: doneList.length },
-                            ].map((t) => (
-                                <button key={t.key} type="button" role="tab" className="sx-tab"
-                                    aria-selected={tab === t.key} onClick={() => setTab(t.key)}>
-                                    {t.label} ({t.count})
-                                </button>
-                            ))}
-                        </div>
-
+                    <div style={{ marginTop: 14 }}>
                         {(years.length > 1 || loanTypes.length > 1) && (
                             <div className="sx-filters">
                                 <label>
@@ -772,19 +759,17 @@ function Status({ setPage } = {}) {
                             </div>
                         )}
 
-                        {shownList.length === 0 ? (
-                            <div className="sx-empty">
-                                {tab === "current" ? "ไม่มีคำขออื่นที่กำลังดำเนินการ" : "ยังไม่มีคำขอที่สำเร็จแล้ว"}
-                            </div>
+                        {historyList.length === 0 ? (
+                            <div className="sx-empty">ไม่พบคำขอตามตัวกรองที่เลือก</div>
                         ) : (
                             <div>
-                                {shownList.map((app) => (
+                                {historyList.map((app) => (
                                     <HistoryItem key={app.application_id} app={app}
                                         detail={details[app.application_id]} onOpen={loadDetail} />
                                 ))}
                             </div>
                         )}
-                    </>
+                    </div>
                 )}
             </section>
         </>,

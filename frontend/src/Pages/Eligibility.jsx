@@ -204,6 +204,31 @@ function Eligibility({ setPage }) {
     if (justCreatedResult) {
         const uploadProblems = justCreatedResult.uploadProblems || [];
 
+        // สร้างคำร้องแล้ว แต่ไม่ผ่านเกณฑ์คัดกรอง (GPAX ไม่ถึง)
+        if (justCreatedResult.eligibilityStatus === "FAILED") {
+            return (
+                <main className={PAGE_MAIN}>
+                    <section className={PAGE_WRAP}>
+                        <PageHeader subtitle="ขั้นตอนการคัดกรองคุณสมบัติ" title={currentUser?.fullName || "-"} />
+
+                        <section className={CARD}>
+                            <SectionHeader
+                                icon="⚠️"
+                                title="ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติ"
+                                subtitle="ระบบบันทึกผลการคัดกรองของคำร้องนี้เรียบร้อยแล้ว"
+                            />
+                            <ResultBody
+                                icon="⚠️"
+                                tone="red"
+                                heading="GPAX ไม่ถึงเกณฑ์ที่กำหนด (ต้องมากกว่า 1.80)"
+                                text={`คำร้องของภาคการศึกษานี้ไม่ผ่านเกณฑ์คัดกรองคุณสมบัติเบื้องต้น (GPAX: ${justCreatedResult.gpax ?? "-"}, ชั่วโมงจิตอาสา: ${justCreatedResult.volunteerHours ?? "-"} ชั่วโมง) กรุณาติดต่อเจ้าหน้าที่หากมีข้อสงสัยเกี่ยวกับผลการคัดกรอง`}
+                            />
+                        </section>
+                    </section>
+                </main>
+            );
+        }
+
         return (
             <main className={PAGE_MAIN}>
                 <section className={PAGE_WRAP}>
@@ -684,19 +709,15 @@ function NewApplicationForm({ setPage, currentUser, createNewApplication, onCrea
             return;
         }
 
-        // เช็คเกณฑ์ฝั่งหน้าเว็บก่อนเสมอ (ใช้เกณฑ์เดียวกับ backend) — ถ้าไม่ผ่าน ห้ามสร้างคำร้อง
-        if (semesterOne) {
-            const gpaxPassed = isGpaxPassed(gpax);
-            const hoursPassed = isHoursPassed(hours, loanTypeCode);
-
-            if (!gpaxPassed || !hoursPassed) {
-                const reasons = [];
-                if (!gpaxPassed) reasons.push("GPAX ต้องมากกว่า 1.80");
-                if (!hoursPassed) reasons.push(`ชั่วโมงจิตอาสาต้อง${hoursCriteriaTextOf(loanTypeCode)}`);
-
-                setError(`ยังไม่ผ่านเกณฑ์คุณสมบัติเบื้องต้น: ${reasons.join(", ")} กรุณาแก้ไขข้อมูลแล้วลองอีกครั้ง`);
-                return;
-            }
+        // ลำดับการตรวจเกณฑ์ (เทอม 1):
+        //   - ชั่วโมงจิตอาสาไม่ผ่าน → แจ้งเตือน ไม่ส่งไป backend
+        //   - จิตอาสาผ่าน แต่ GPAX ไม่ผ่าน → ส่งไป backend ให้บันทึกว่าไม่ผ่านการคัดกรอง
+        //     (backend ตั้ง eligibility_status = FAILED, application_status = ELIGIBILITY_FAILED)
+        if (semesterOne && !isHoursPassed(hours, loanTypeCode)) {
+            setError(
+                `ยังไม่ผ่านเกณฑ์คุณสมบัติเบื้องต้น: ชั่วโมงจิตอาสาต้อง${hoursCriteriaTextOf(loanTypeCode)} กรุณาแก้ไขข้อมูลแล้วลองอีกครั้ง`
+            );
+            return;
         }
 
         setSubmitting(true);
@@ -723,7 +744,8 @@ function NewApplicationForm({ setPage, currentUser, createNewApplication, onCrea
         // ตอนนี้จะเก็บรายการที่ไม่สำเร็จไว้แจ้งผู้ใช้ และหน้าอัปโหลดเอกสารจะบังคับให้แนบใหม่
         const uploadProblems = [];
 
-        if (semesterOne) {
+        // ไม่ผ่านคัดกรองแล้ว ไม่ต้องอัปโหลดหลักฐานต่อ
+        if (semesterOne && result.eligibilityStatus !== "FAILED") {
             const evidences = [
                 { code: GPAX_CODE, file: gpaxFile, label: "หลักฐาน GPAX" },
                 { code: VOLUNTEER_CODE, file: hoursFile, label: "หลักฐานชั่วโมงจิตอาสา" },
@@ -757,7 +779,12 @@ function NewApplicationForm({ setPage, currentUser, createNewApplication, onCrea
         }
 
         setSubmitting(false);
-        onCreated({ ...result, uploadProblems });
+        onCreated({
+            ...result,
+            uploadProblems,
+            gpax: semesterOne ? Number(gpax) : null,
+            volunteerHours: semesterOne ? Number(hours) : null,
+        });
     };
 
     const currentSummary = [

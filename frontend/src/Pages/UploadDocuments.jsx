@@ -12,6 +12,7 @@ import { uploadStudentDocument } from "../services/api";
 const PRESCREEN_CATEGORIES = ["GPAX_EVIDENCE", "VOLUNTEER_EVIDENCE"];
 
 function UploadDocuments({ setPage }) {
+  //รับข้อมูลนักศึกษาและสร้างตัวแปร State
   const {
     selectedStudent,
     refreshSelectedStudentDetail,
@@ -26,6 +27,7 @@ function UploadDocuments({ setPage }) {
 
   // โหลดรายการเอกสารล่าสุดจาก backend ทุกครั้งที่เปิดหน้า
   // (เผื่อเพิ่งอัปโหลดหลักฐาน GPAX / จิตอาสามาจากหน้าคัดกรอง จะได้ไม่ถูกขอซ้ำ)
+  //ส่วนนี้ทำงานเมื่อเปิดหน้า UploadDocuments
   useEffect(() => {
     let cancelled = false;
 
@@ -50,26 +52,28 @@ function UploadDocuments({ setPage }) {
   //   2) เคยอัปโหลดแล้วแต่เจ้าหน้าที่ตีกลับ (status === REVISION_REQUIRED)
   // ส่วนที่ "ผ่าน" หรือ "รอตรวจสอบ" ยังคงล็อกไว้ — ใช้ requirementId จริงจาก backend เสมอ
   // รายการนี้มาจาก backend ชุดเดียวกับที่หน้าสถานะใช้ จึงไม่มีทางส่งไม่ครบได้อีก
+
+  //เลือกว่าเอกสารใดต้องแสดงช่องอัปโหลด
   const pendingRequirements = useMemo(() => {
     return (selectedStudent?.requiredDocuments || [])
       .filter(
-        (item) => !item.documentId || item.status === "REVISION_REQUIRED"
+        (item) => !item.documentId || item.status === "REVISION_REQUIRED"//ใช้เลือกเอกสารที่ต้องอัปโหลด
       )
       .map((item) => ({
         requirementId: item.requirementId,
-        category: mapBackendCodeToCategory(item.documentCode),
+        category: mapBackendCodeToCategory(item.documentCode),//เคยส่งแล้ว ส่งใหม่
         name: item.documentType,
         isReupload: Boolean(item.documentId),
         previousFileName: item.fileName || "",
-        rejectReason: item.note || "",
+        rejectReason: item.note || "",//เหตุผลที่ถูกตีกลับ
       }));
   }, [selectedStudent]);
 
   // เอกสารที่ "ผ่าน" หรือ "รอตรวจสอบ" อยู่ — โชว์แบบล็อก แก้ไม่ได้
   // (ที่ถูกตีกลับจะย้ายไปอยู่ในโซนอัปโหลดด้านบนแทน ไม่ต้องโชว์ซ้ำตรงนี้)
   const uploadedDocuments = [
-    ...(selectedStudent?.qualificationDocuments || []),
-    ...(selectedStudent?.documents || []),
+    ...(selectedStudent?.qualificationDocuments || []),//เอกสารด้านคุณสมบัติ เช่น หลักฐานคัดกรอง
+    ...(selectedStudent?.documents || []),//เอกสารอื่น ๆ ที่นักศึกษาส่ง
   ].filter((doc) => doc.status !== "ต้องแก้ไข");
 
   const required = pendingRequirements;
@@ -77,14 +81,14 @@ function UploadDocuments({ setPage }) {
   const selectedCount = required.filter(
     (item) => files[item.requirementId]
   ).length;
-
+  //ข้อความแสดงความคืบหน้า
   const progress = `${selectedCount}/${required.length}`;
   const progressPercent =
     required.length > 0
       ? Math.round((selectedCount / required.length) * 100)
       : 100;
-  const allSelected = required.length > 0 && selectedCount === required.length;
-
+  const allSelected = required.length > 0 && selectedCount === required.length;//เป็น true เมื่อมีเอกสารที่ต้องส่งอย่างน้อยหนึ่งรายการและเลือกไฟล์ครบทุกช่องแล้ว
+  //เลือกไฟล์และลบไฟล์ที่เลือก
   const handleFileChange = (requirementId, file) => {
     setFiles((current) => ({
       ...current,
@@ -94,7 +98,7 @@ function UploadDocuments({ setPage }) {
     setMessage("");
     setMessageType("");
   };
-
+  //ทำงานเมื่อผู้ใช้กดเครื่องหมาย ✕ ข้างชื่อไฟล์
   const handleRemoveFile = (requirementId) => {
     setFiles((current) => {
       const updated = { ...current };
@@ -151,7 +155,7 @@ function UploadDocuments({ setPage }) {
 
     setMessage("");
     setMessageType("");
-    setSubmitting(true);
+    setSubmitting(true);//เริ่มส่งเอกสารทั้งหมด
 
     const results = await Promise.all(
       required.map((item) => uploadOneFile(item.requirementId))
@@ -260,6 +264,7 @@ function UploadDocuments({ setPage }) {
             ) : (
               <div className="flex flex-col rounded-2xl bg-white px-6 py-2 shadow-sm lg:px-8">
                 {required.map((item, index) => (
+                  // แถวลิสต์เอกสารแต่ละรายการ
                   <ListUploadRow
                     key={item.requirementId}
                     number={index + 1}
@@ -336,8 +341,8 @@ function UploadDocuments({ setPage }) {
 
           <button
             type="button"
-            onClick={handleSubmitAll}
-            disabled={refreshing || !allSelected || submitting}
+            onClick={handleSubmitAll} //ส่งเอกสารทั้งหมด
+            disabled={refreshing || !allSelected || submitting} //ปุ่มนี้ยังกดไม่ได้ เมื่อเอกสารไม่ครบ
             className="h-12 max-w-sm flex-1 rounded-xl bg-gradient-to-r from-[#07116f] to-[#0646ff] px-8 text-base font-black text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting
@@ -351,7 +356,7 @@ function UploadDocuments({ setPage }) {
     </main>
   );
 }
-
+//สถานะป้ายเป็นสี
 function StatusPill({ status }) {
   const styles = {
     ผ่าน: "bg-green-100 text-green-700",
@@ -381,6 +386,9 @@ function ListUploadRow({
   onChange,
   onRemove,
 }) {
+  //ถ้าเป็นการส่งแก้ไข
+  //และยังไม่ได้เลือกไฟล์ใหม่ needsFix จะเป็น true
+  // จากนั้นแถวจะมีพื้นหลังสีแดงอ่อน พร้อมป้าย “ต้องแก้ไข”
   const needsFix = isReupload && !file;
 
   return (

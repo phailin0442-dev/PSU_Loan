@@ -14,7 +14,7 @@
  * route จึงตอบกลับแบบ res.status(error.status || 500).json({ message: error.message }) ได้เลย
  */
 const pool = require("../config/db");
-
+// //  รหัสจากฐานข้อมูล    [เลขสถานะ, ข้อความที่ให้นักศึกษาเห็น]
 const DB_ERRORS = {
     APPLICATION_NOT_FOUND: [404, "ไม่พบคำร้องกู้ยืม"],
     FORBIDDEN: [403, "ไม่มีสิทธิ์จัดการการจองของคำร้องนี้"],
@@ -43,6 +43,7 @@ function toHttpError(error) {
         return httpError(status, message, error.message);
     }
     // จาก trigger เดิม prevent_queue_overbooking
+    //ฐานข้อมูลบอกว่า "Queue slot ... is full" → แปลว่า "ช่วงเวลานี้เต็มแล้ว"
     if (/Queue slot \d+ is full/.test(error.message || "")) {
         return httpError(409, DB_ERRORS.SLOT_FULL[1], "SLOT_FULL");
     }
@@ -100,8 +101,10 @@ const toBooking = (row) =>
         : null;
 
 // เจ้าของคำร้อง หรือเจ้าหน้าที่ เท่านั้น
+//ให้ดูหรือแก้การจองได้เฉพาะเจ้าของคำร้องหรือเจ้าหน้าที่
 async function assertCanAccessApplication(applicationId, userId) {
     const result = await pool.query(
+        // ถามฐานข้อมูล: คำร้องนี้ของใคร และคนที่ถามเป็นเจ้าหน้าที่ไหม
         `SELECT a.student_id,
                 EXISTS (SELECT 1 FROM psu_loan.staff_profiles s WHERE s.staff_id = $2) AS is_staff
            FROM psu_loan.applications a
@@ -118,7 +121,7 @@ async function assertCanAccessApplication(applicationId, userId) {
 }
 
 /* ---------- public ---------- */
-
+//เปิดหน้า ให้เห็นรอบที่ว่าง
 async function getBookableSlots({ days } = {}) {
     const parsedDays = Math.min(Math.max(parseInt(days, 10) || 14, 1), 60);
 
@@ -135,7 +138,7 @@ async function getBookableSlots({ days } = {}) {
 
     return result.rows.map(toSlot);
 }
-
+//ดูว่าจองไว้แล้วหรือยัง
 async function getActiveBooking({ applicationId, userId }) {
     const appId = requireId(applicationId, "รหัสคำร้องไม่ถูกต้อง");
 
@@ -170,7 +173,7 @@ async function bookSlot({ applicationId, slotId, userId }) {
         throw toHttpError(error);
     }
 }
-
+//ยกเลิกการจอง
 async function cancelBooking({ applicationId, reason, userId }) {
     const appId = requireId(applicationId, "รหัสคำร้องไม่ถูกต้อง");
     const cleanReason = typeof reason === "string" ? reason.trim().slice(0, 300) : "";

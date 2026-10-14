@@ -300,7 +300,7 @@ function DocumentReview({ student, setPage, onSave }) {
 
         submitReview("ต้องแก้ไข", noteDraft);
     };
-
+    // กดปุ่มดูประวัติ → โหลดประวัติจาก API ด้านบน
     const handleToggleHistory = async () => {
         if (!activeRow?.requirementId) return;
 

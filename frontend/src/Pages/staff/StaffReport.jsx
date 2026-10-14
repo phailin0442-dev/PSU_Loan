@@ -35,7 +35,7 @@ function formatDate(iso) {
 }
 
 /* ---------- ส่วนประกอบย่อย ---------- */
-
+// แถบสี 4 สี: ความกว้างแต่ละสี = สัดส่วนของสถานะนั้น
 function StackedBar({ counts, className = "h-4" }) {
     const total = STATUS_KEYS.reduce((s, k) => s + counts[k], 0);
     return (
@@ -48,6 +48,27 @@ function StackedBar({ counts, className = "h-4" }) {
                 STATUS_KEYS.map((k) => (
                     <div key={k} className={`${STATUS[k].bar} h-full`} style={{ width: `${(counts[k] / total) * 100}%` }} />
                 ))}
+        </div>
+    );
+}
+
+// กราฟแท่งแนวนอนของคณะ 1 แถว: ความยาวแท่ง = จำนวนผู้กู้ (เทียบกับคณะที่มากที่สุด)
+// ข้างในแท่งแบ่งสีตามจำนวนคนแต่ละสถานะ (ไม่คิดเป็นเปอร์เซ็นต์)
+function FacultyBar({ counts, max }) {
+    return (
+        <div className="h-4 w-full rounded-md bg-slate-100">
+            <div
+                className="flex h-full overflow-hidden rounded-md"
+                style={{ width: `${max ? (counts.total / max) * 100 : 0}%` }}
+                role="img"
+                aria-label={`${nf(counts.total)} ราย: ` + STATUS_KEYS.map((k) => `${STATUS[k].short} ${counts[k]}`).join(" ")}
+            >
+                {STATUS_KEYS.map((k) =>
+                    counts[k] > 0 ? (
+                        <div key={k} className={`${STATUS[k].bar} h-full`} style={{ flexGrow: counts[k], flexBasis: 0 }} />
+                    ) : null
+                )}
+            </div>
         </div>
     );
 }
@@ -68,6 +89,7 @@ const PIE_OTHER_COLOR = "#cbd5e1";
 const PIE_MAX_SLICES = 5;
 
 // รวมรายการที่เกิน 5 อันดับเป็น "อื่น ๆ"
+//กราฟวงกลม: เอา 5 อันดับแรก ที่เหลือรวมเป็น "อื่น ๆ"
 function toSlices(items) {
     const sorted = [...items].sort((a, b) => b.count - a.count);
     const top = sorted.slice(0, PIE_MAX_SLICES).map((it, i) => ({ ...it, color: PIE_COLORS[i] }));
@@ -95,7 +117,13 @@ function PieChart({ items, unit = "ครั้ง", emptyText }) {
     const stroke = 30;
     const r = (size - stroke) / 2;
     const circ = 2 * Math.PI * r;
-    let offset = 0;
+
+    // คำนวณความยาวและจุดเริ่มของแต่ละชิ้นไว้ก่อน (ไม่แก้ตัวแปรระหว่าง render
+    // ซึ่ง ESLint ของ React ห้าม) — จุดเริ่มของชิ้นถัดไป = ผลรวมความยาวของชิ้นก่อนหน้า
+    const arcs = slices.reduce((list, s) => {
+        const start = list.length ? list[list.length - 1].start + list[list.length - 1].len : 0;
+        return [...list, { ...s, len: (s.count / total) * circ, start }];
+    }, []);
 
     return (
         <div className="mt-5 flex flex-col items-center gap-6 sm:flex-row sm:items-center">
@@ -109,26 +137,21 @@ function PieChart({ items, unit = "ครั้ง", emptyText }) {
                     aria-label={slices.map((s) => `${s.name} ${s.count} ${unit}`).join(", ")}
                 >
                     <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
-                    {slices.map((s) => {
-                        const len = (s.count / total) * circ;
-                        const el = (
-                            <circle
-                                key={s.name}
-                                cx={size / 2}
-                                cy={size / 2}
-                                r={r}
-                                fill="none"
-                                stroke={s.color}
-                                strokeWidth={stroke}
-                                strokeDasharray={`${len} ${circ - len}`}
-                                strokeDashoffset={-offset}
-                            >
-                                <title>{`${s.name}: ${nf(s.count)} ${unit} (${pct(s.count, total)}%)`}</title>
-                            </circle>
-                        );
-                        offset += len;
-                        return el;
-                    })}
+                    {arcs.map((s) => (
+                        <circle
+                            key={s.name}
+                            cx={size / 2}
+                            cy={size / 2}
+                            r={r}
+                            fill="none"
+                            stroke={s.color}
+                            strokeWidth={stroke}
+                            strokeDasharray={`${s.len} ${circ - s.len}`}
+                            strokeDashoffset={-s.start}
+                        >
+                            <title>{`${s.name}: ${nf(s.count)} ${unit} (${pct(s.count, total)}%)`}</title>
+                        </circle>
+                    ))}
                 </svg>
                 <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
                     <span className="text-3xl font-black tabular-nums">{nf(total)}</span>
@@ -282,14 +305,17 @@ function StaffReport() {
             .sort((a, b) => b.total - a.total);
     }, [allRows]);
 
+    // จำนวนผู้กู้ของคณะที่มากที่สุด ใช้เป็นความยาวเต็มของกราฟแท่ง
+    const maxFacultyTotal = faculties.reduce((m, f) => Math.max(m, f.total), 0);
+
     // ถ้าคณะที่เลือกไม่มีในภาคนี้ ถือว่าเลือก "ทั้งหมด"
     const activeFaculty = faculty === ALL_FACULTIES || faculties.some((f) => f.name === faculty) ? faculty : ALL_FACULTIES;
-
+    //เลือกคณะ → เหลือเฉพาะคณะนั้น
     const facultyRows = useMemo(
         () => (activeFaculty === ALL_FACULTIES ? allRows : allRows.filter((r) => r.faculty === activeFaculty)),
         [allRows, activeFaculty]
     );
-
+    //ยอดรวม 4 สถานะ (ตัวเลขในการ์ดด้านบน)
     const totals = useMemo(() => {
         const t = emptyCounts();
         facultyRows.forEach((r) => (t[r.status] += 1));
@@ -310,7 +336,8 @@ function StaffReport() {
     }, [facultyRows, statusFilter, query]);
 
     const currentTermLabel = termLabel(report?.term);
-
+    //ส่งออกExcel
+    // สร้างไฟล์ Excel เปล่า
     const exportExcel = () => {
         const today = new Date().toLocaleDateString("th-TH", { dateStyle: "long" });
         const facList = activeFaculty === ALL_FACULTIES ? faculties : faculties.filter((f) => f.name === activeFaculty);
@@ -500,7 +527,18 @@ function StaffReport() {
                         <div className="grid items-start gap-6 lg:grid-cols-2">
                             <section className="rounded-2xl bg-white p-6 sm:p-8">
                                 <h2 className="text-lg font-black">สถานะแยกตามคณะ</h2>
-                                <p className="mt-1 text-sm text-gray-500">กดชื่อคณะเพื่อดูเฉพาะคณะนั้น</p>
+                                <p className="mt-1 text-sm text-gray-500">จำนวนผู้กู้แต่ละคณะ แยกตามสถานะ · กดชื่อคณะเพื่อดูเฉพาะคณะนั้น</p>
+
+                                {/* คำอธิบายสี */}
+                                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-600">
+                                    {STATUS_KEYS.map((k) => (
+                                        <span key={k} className="inline-flex items-center gap-1.5">
+                                            <span className={`h-2.5 w-2.5 rounded-sm ${STATUS[k].dot}`} />
+                                            {STATUS[k].short}
+                                        </span>
+                                    ))}
+                                </div>
+
                                 <ul className="mt-5 space-y-5">
                                     {faculties.map((f) => {
                                         const isActive = activeFaculty === f.name;
@@ -517,11 +555,16 @@ function StaffReport() {
                                                 >
                                                     <div className="mb-2 flex items-baseline justify-between gap-3 text-sm">
                                                         <span className={`font-bold ${isActive ? "underline underline-offset-4" : ""}`}>{f.name}</span>
-                                                        <span className="shrink-0 tabular-nums text-gray-500">
-                                                            ผ่าน {pct(f.approved, f.total)}% จาก {nf(f.total)} ราย
+                                                        <span className="shrink-0 font-bold tabular-nums text-gray-700">
+                                                            {nf(f.total)} ราย
                                                         </span>
                                                     </div>
-                                                    <StackedBar counts={f} className="h-3" />
+                                                    <FacultyBar counts={f} max={maxFacultyTotal} />
+                                                    <p className="mt-1.5 text-xs tabular-nums text-gray-500">
+                                                        {STATUS_KEYS.filter((k) => f[k] > 0)
+                                                            .map((k) => `${STATUS[k].short} ${nf(f[k])}`)
+                                                            .join(" · ")}
+                                                    </p>
                                                 </button>
                                             </li>
                                         );

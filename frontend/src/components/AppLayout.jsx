@@ -8,7 +8,7 @@ import { QUEUE_FAIL_DEFAULTS, fetchQueueFailMessage } from "../services/api";
 // (AppLayout อาจถูกสร้างใหม่ทุกครั้งที่เปลี่ยนหน้า ถ้าไม่กันไว้จะเด้งกลับหน้าเดิมตลอด)
 let restoredOnce = false;
 
-function AppLayout({ setPage, children }) {
+function AppLayout({ page, setPage, children }) {
     const { role, homePage, isAuthenticated, isStaffUser, selectedStudent } = useApp();
 
     // popup "เอกสารส่งไม่สำเร็จ" — ขึ้นครั้งเดียวต่อผลตรวจแต่ละครั้ง (จำว่ากดรับทราบแล้วในแท็บนี้)
@@ -70,7 +70,7 @@ function AppLayout({ setPage, children }) {
 
     return (
         <div className="min-h-screen bg-[#eef5ff] text-[#07116f]">
-            <AppNavbar setPage={setPage} />
+            <AppNavbar page={page} setPage={setPage} />
             {children}
 
             {showFailPopup && (

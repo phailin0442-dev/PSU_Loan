@@ -253,7 +253,9 @@ function AppContent() {
       {page === "login" ? (
         <Login setPage={setPage} />
       ) : (
-        <AppLayout setPage={goProtectedPage}>{renderPage()}</AppLayout>
+        <AppLayout page={page} setPage={goProtectedPage}>
+          {renderPage()}
+        </AppLayout>
       )}
     </>
   );

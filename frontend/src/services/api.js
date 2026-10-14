@@ -28,19 +28,19 @@ async function handleResponse(response) {
 | ฝั่งนักศึกษา
 |--------------------------------------------------------------------------
 */
-
+//ดึงรายชื่อนักศึกษา
 export async function fetchStudentList() {
-    const response = await fetch(`${API_BASE_URL}/api/student`);
+    const response = await fetch(`${API_BASE_URL}/api/student`);//เป็นเส้นทาง API ที่เรียกใช้งาน
     return handleResponse(response);
 }
-
+//ดึงตาม applicationId
 export async function fetchStudentDetail(applicationId) {
     const response = await fetch(
         `${API_BASE_URL}/api/student/${applicationId}`
     );
     return handleResponse(response);
 }
-
+//ส่งไฟล์เอกสารไปยัง Backend
 export async function uploadStudentDocument(
     applicationId,
     { file, requirementId, uploadedBy }
@@ -72,7 +72,7 @@ export async function updateHomeContent(payload) {
     });
     return handleResponse(response);
 }
-
+//ดึงช่วงเวลายื่นกู้
 export async function fetchApplicationPeriods() {
     const response = await fetch(
         `${API_BASE_URL}/api/staff/application-periods`
@@ -105,7 +105,7 @@ export async function updateApplicationPeriod(periodId, { startDate, endDate, is
     );
     return handleResponse(response);
 }
-
+//เปิดหรือปิดเทอม
 export async function toggleApplicationPeriod(periodId) {
     const response = await fetch(
         `${API_BASE_URL}/api/staff/application-periods/${periodId}/toggle`,
@@ -127,7 +127,7 @@ export async function saveQueueDates(periodId, { queueStartDate, queueEndDate })
     );
     return handleResponse(response);
 }
-
+//ดึงข้อมูล Dashboard
 export async function fetchStaffDashboard() {
     const response = await fetch(`${API_BASE_URL}/api/staff/dashboard`);
     return handleResponse(response);
@@ -145,7 +145,7 @@ export async function fetchStaffReport({ academicYear, semester, scope } = {}) {
     const response = await fetch(`${API_BASE_URL}/api/staff/report${qs ? `?${qs}` : ""}`);
     return handleResponse(response);
 }
-
+//ค้นหารายชื่อนักศึกษา
 export async function fetchStaffStudentList({ status, search } = {}) {
     const params = new URLSearchParams();
 
@@ -184,7 +184,7 @@ export async function updateApplicationStatus(
 
     return handleResponse(response);
 }
-
+//ตรวจเอกสารรายฉบับ reviewDocument(
 export async function reviewDocument(
     applicationId,
     documentId,
@@ -219,7 +219,7 @@ export async function registerUser(payload) {
     });
     return handleResponse(response);
 }
-
+//ดูและแก้ไขโปรไฟล์นักศึกษา
 export async function fetchMyProfile(userId) {
     const response = await fetch(
         `${API_BASE_URL}/api/student/profile/${userId}`
@@ -247,12 +247,12 @@ export async function createApplication(payload) {
     });
     return handleResponse(response);
 }
-
+// ดึงข้อความหน้าแรก
 export async function fetchHomeContent() {
     const response = await fetch(`${API_BASE_URL}/api/home`);
     return handleResponse(response);
 }
-
+// ดึงรายชื่อเจ้าหน้าที่
 export async function fetchStaffList() {
     const response = await fetch(`${API_BASE_URL}/api/staff/list`);
     return handleResponse(response);
@@ -358,7 +358,7 @@ export const QUEUE_FAIL_DEFAULTS = {
     incomplete: "เจ้าหน้าที่ตรวจเอกสารฉบับจริงในวันนัดแล้ว พบว่าเอกสารยังไม่ครบถ้วน",
     contact: "กรุณาติดต่อเจ้าหน้าที่กองทุนฯ ณ กองพัฒนานักศึกษา อาคาร 2 ในวันและเวลาราชการ เพื่อดำเนินการต่อ",
 };
-
+// ดึงข้อความ popup
 export async function fetchQueueFailMessage() {
     const response = await fetch(`${API_BASE_URL}/api/student/messages/queue-fail`);
     return handleResponse(response);

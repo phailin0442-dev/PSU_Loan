@@ -14,21 +14,21 @@
  *     แล้วค่อยสรุปผลล่าสุดไปอัปเดต applications.eligibility_status
  */
 const pool = require("../config/db");
-
+//ตัวสร้างข้อความแจ้งปัญหา
 function httpError(status, message, code = "BAD_REQUEST") {
     const error = new Error(message);
     error.status = status;
     error.code = code;
     return error;
 }
-
+//ตัวเช็กเลขคำร้อง
 function parsePositiveInteger(value) {
     const parsed = Number(value);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 /* ---------- อ่านเกณฑ์ ---------- */
-
+//ไปหยิบเกณฑ์จากฐานข้อมูล
 async function getEligibilityRule({ loanTypeId, academicYear, semester }) {
     const result = await pool.query(
         `SELECT eligibility_rule_id, loan_type_id, academic_year, semester,
@@ -61,7 +61,7 @@ async function runEligibilityCheck({ applicationId, staffId, remark }) {
         if (appResult.rowCount === 0) throw httpError(404, "ไม่พบคำร้องนี้", "APPLICATION_NOT_FOUND");
         const app = appResult.rows[0];
 
-        if (app.semester === 2) {
+        if (app.semester === 2) { // // เทอม 2 ไม่ต้องคัดกรอง
             throw httpError(409, "คำร้องภาคเรียนที่ 2 ไม่ต้องคัดกรองคุณสมบัติ", "NOT_REQUIRED");
         }
         if (!["SUBMITTED", "ELIGIBILITY_REVIEW", "ELIGIBILITY_FAILED"].includes(app.application_status)) {
@@ -84,12 +84,15 @@ async function runEligibilityCheck({ applicationId, staffId, remark }) {
         if (!rule.is_screening_required) {
             result = "NOT_REQUIRED";
         } else {
+            //// GPAX ต้องมีค่า และมากกว่าหรือเท่ากับขั้นต่ำ
             gpaxPassed = app.gpax !== null && Number(app.gpax) >= Number(rule.min_gpax);
+            //ชั่วโมงจิตอาสาต้องมีค่า และมากกว่าหรือเท่ากับขั้นต่ำ
             volunteerPassed = app.volunteer_hours !== null && Number(app.volunteer_hours) >= Number(rule.min_volunteer_hours);
             result = gpaxPassed && volunteerPassed ? "PASSED" : "FAILED";
         }
 
         const roundResult = await client.query(
+            // หาว่าเคยตรวจกี่ครั้งแล้ว แล้วบวก 1
             `SELECT COALESCE(MAX(check_round), 0) + 1 AS next_round
                FROM psu_loan.eligibility_checks WHERE application_id = $1`,
             [appId]
@@ -102,7 +105,7 @@ async function runEligibilityCheck({ applicationId, staffId, remark }) {
              VALUES ($1, $2, $3, $4, $5::psu_loan.eligibility_result_code, $6, $7)`,
             [appId, nextRound, gpaxPassed, volunteerPassed, result, remark || null, staffId]
         );
-
+        // ผ่าน หรือ ไม่ต้องคัดกรอง → "รอตรวจเอกสาร" · ไม่ผ่าน → "ไม่ผ่านคัดกรอง"
         const nextApplicationStatus =
             result === "PASSED" || result === "NOT_REQUIRED" ? "DOCUMENT_REVIEW" : "ELIGIBILITY_FAILED";
 
@@ -115,14 +118,14 @@ async function runEligibilityCheck({ applicationId, staffId, remark }) {
             [rule.eligibility_rule_id, result, nextApplicationStatus, appId]
         );
 
-        await client.query("COMMIT");
+        await client.query("COMMIT"); //ทุกขั้นสำเร็จ ยืนยันบันทึกทั้งหมด
 
         return {
             applicationId: appId,
-            checkRound: nextRound,
+            checkRound: nextRound, //ตรวจครั้งที่เท่าไหร่
             gpaxPassed,
             volunteerPassed,
-            result,
+            result,//ผลรวม
             applicationStatus: nextApplicationStatus,
         };
     } catch (error) {
@@ -140,6 +143,7 @@ async function getEligibilityHistory({ applicationId }) {
     if (!appId) throw httpError(400, "รหัสคำร้องไม่ถูกต้อง");
 
     const result = await pool.query(
+        //ดึงประวัติทุกรอบ พร้อมชื่อเจ้าหน้าที่ที่ตรวจ
         `SELECT ec.check_round AS "round", ec.gpax_passed AS "gpaxPassed",
                 ec.volunteer_passed AS "volunteerPassed", ec.result, ec.remark,
                 ec.checked_at AS "checkedAt",
@@ -150,7 +154,7 @@ async function getEligibilityHistory({ applicationId }) {
           ORDER BY ec.check_round ASC`,
         [appId]
     );
-    return result.rows;
+    return result.rows; //ส่งรายการประวิติกลับ
 }
 
 module.exports = { getEligibilityRule, runEligibilityCheck, getEligibilityHistory };

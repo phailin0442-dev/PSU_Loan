@@ -243,13 +243,14 @@ router.post(
                 extension
             );
             const newFilePath = path.join(uploadDirectory, storedFileName);
-
+            //ส่วนที่เปลี่ยนชื่อไฟล์
             await fs.rename(req.file.path, newFilePath);
             currentFilePath = newFilePath;
 
             // หาเวอร์ชันปัจจุบัน (ถ้าเคยอัปโหลดเอกสารรายการนี้มาก่อน) แล้วปิดไว้
             // ก่อน insert เวอร์ชันใหม่ ตาม unique index uq_application_document_current
             // ที่บังคับให้มีแค่ 1 แถวที่ is_current = TRUE ต่อ requirement ต่อคำร้อง
+            //หาเวอร์ชั่นของเอกสาร
             const currentDocumentResult = await client.query(
                 `SELECT document_id, version_no
                  FROM psu_loan.application_documents
@@ -258,10 +259,10 @@ router.post(
                 [applicationId, requirementId]
             );
 
-            let nextVersion = 1;
+            let nextVersion = 1; //ยังไม่เคยส่ง = ครั้งที่ 1
 
-            if (currentDocumentResult.rowCount > 0) {
-                nextVersion = currentDocumentResult.rows[0].version_no + 1;
+            if (currentDocumentResult.rowCount > 0) { //เคยส่งแล้ว
+                nextVersion = currentDocumentResult.rows[0].version_no + 1; //ครั้งต่อไปมันจะ +1
 
                 await client.query(
                     `UPDATE psu_loan.application_documents
