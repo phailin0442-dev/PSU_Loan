@@ -8,7 +8,7 @@ export const PAGE_KEY = "psu_loan_page";
 // หน้าที่จำได้ แยกตามบทบาท (ตรงกับเมนูใน AppNavbar)
 export const MEMORABLE_PAGES = {
     staff: ["studentList", "staffBooking", "staffReport", "staffSettings"],
-    student: ["home", "studentProfiles", "eligibility", "status"],
+    student: ["home", "studentProfiles", "eligibility", "status", "credits"],
 };
 
 export function rememberPage(page) {

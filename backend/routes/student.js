@@ -134,7 +134,7 @@ router.post("/bookings/cancel", requireLogin, async (req, res) => {
         return sendBookingError(res, error, "ไม่สามารถยกเลิกการจองได้", "POST /api/student/bookings/cancel error:");
     }
 });
-
+//ส่วนที่ดึงมาจากดาต้าเบส เอามาแสดงผลหน้าเว็บ สถานะ
 /*
 | ดูคำร้องนักศึกษาทั้งหมด
 | GET /api/student

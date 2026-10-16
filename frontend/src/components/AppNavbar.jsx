@@ -16,6 +16,7 @@ function AppNavbar({ setPage, page }) {
         { id: "student-profile", page: "studentProfiles", alsoActive: ["studentInfo"], label: "ข้อมูลของฉัน" },
         { id: "student-loan-application", page: "eligibility", alsoActive: ["uploadDocuments", "booking"], label: "คำขอกู้ยืม กยศ." },
         { id: "student-status", page: "status", label: "ติดตามสถานะ" },
+        { id: "student-credits", page: "credits", label: "ประวัติผู้จัดทำ" }, 
     ];
 
     const staffMenus = [

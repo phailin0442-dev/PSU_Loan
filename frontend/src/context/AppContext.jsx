@@ -412,8 +412,20 @@ export function AppProvider({ children }) {
         [currentUser]
     );
 
+    // โหลดรายชื่อคำร้องครั้งแรกตอนเปิดเว็บ
+    // ใช้ setTimeout(0) เลื่อนไปทำหลัง effect จบ (แบบเดียวกับ effect อื่นในไฟล์นี้)
+    // เพราะ refreshStudentList สั่ง setLoading/setLoadError ทันที ถ้าเรียกตรงๆ
+    // ESLint (react-hooks/set-state-in-effect) จะเตือนว่าทำให้ render ซ้ำเป็นทอดๆ
     useEffect(() => {
-        refreshStudentList();
+        const timerId = window.setTimeout(() => {
+            void refreshStudentList();
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timerId);
+        };
+        // โหลดแค่ครั้งแรกครั้งเดียว ไม่ต้องโหลดใหม่ทุกครั้งที่ currentUser เปลี่ยน
+        // (login / register เรียก refreshStudentList เองอยู่แล้ว)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
